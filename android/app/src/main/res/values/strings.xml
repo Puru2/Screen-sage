@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ScreenSage</string>
+    <string name="accessibility_service_description">
+        ScreenSage uses accessibility to detect when a blocked app opens during
+        a focus session, so it can redirect you back to your goal. No personal
+        data or screen content is read or stored.
+    </string>
+</resources>

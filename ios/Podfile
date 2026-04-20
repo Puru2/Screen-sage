@@ -1,0 +1,82 @@
+# Uncomment this line to define a global platform for your project
+platform :ios, '16.0'
+
+# CocoaPods analytics sends network stats synchronously affecting flutter build latency.
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
+def flutter_root
+  generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+  unless File.exist?(generated_xcode_build_settings_path)
+    raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
+  end
+
+  File.foreach(generated_xcode_build_settings_path) do |line|
+    matches = line.match(/FLUTTER_ROOT\=(.*)/)
+    return matches[1].strip if matches
+  end
+  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Generated.xcconfig, then run flutter pub get"
+end
+
+require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
+
+flutter_ios_podfile_setup
+
+target 'Runner' do
+  use_frameworks!
+  use_modular_headers!
+
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  target 'RunnerTests' do
+    inherit! :search_paths
+  end
+end
+
+# ── Extension targets ──────────────────────────────────────────────────────────
+# Extensions don't use Flutter pods — they're pure Swift targets.
+# Declaring them here prevents CocoaPods from throwing warnings about
+# "no targets" and ensures build settings are applied correctly.
+
+target 'DeviceActivityExtension' do
+  use_frameworks!
+  use_modular_headers!
+  # No pods needed — DeviceActivity & ManagedSettings are system frameworks
+end
+
+target 'ShieldConfigurationExtension' do
+  use_frameworks!
+  use_modular_headers!
+  # No pods needed — ManagedSettingsUI is a system framework
+end
+
+target 'ShieldActionExtension' do
+  use_frameworks!
+  use_modular_headers!
+  # No pods needed — ManagedSettings is a system framework
+end
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+
+    # Force all targets (including extensions) to iOS 16.0 minimum
+    # Without this, extension targets may default to a lower deployment target
+    # and cause "incompatible with module compiled with" build errors
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
+      # Exclude extension targets from simulator builds
+      if ['DeviceActivityExtension',
+          'ShieldConfigurationExtension',
+          'ShieldActionExtension'].include?(target.name)
+        config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64 x86_64'
+      end
+    end
+  end
+end

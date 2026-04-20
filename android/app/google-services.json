@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "690263266063",
+    "project_id": "screen-sage-dfef4",
+    "storage_bucket": "screen-sage-dfef4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:690263266063:android:7b803cdf0aa25716aca47a",
+        "android_client_info": {
+          "package_name": "com.pratham.screensage"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "690263266063-r1987igq1dtd9n9q5iqc486qihv2hkir.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.pratham.screensage",
+            "certificate_hash": "ade27a7cd2d0d449a082a2f3ff7bf99450363ca9"
+          }
+        },
+        {
+          "client_id": "690263266063-i31tlr5ahudr6bfrrhrf6b783gabfanr.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDp-TGz7jkB1vEKj7TiEkmvnI2ON-08oA8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "690263266063-i31tlr5ahudr6bfrrhrf6b783gabfanr.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "690263266063-5prggig16o73ifmr9lkpg94h2ujg52qs.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.pratham.screensage"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
