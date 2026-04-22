@@ -51,6 +51,13 @@ class SessionAuthorizationRequested extends SessionEvent {}
 
 class SessionResetRequested extends SessionEvent {}
 
+class OverrideDetected extends SessionEvent {
+  final int count;
+  OverrideDetected(this.count);
+  @override
+  List<Object?> get props => [count];
+}
+
 // ── States ────────────────────────────────────────────────────────
 abstract class SessionState extends Equatable {
   @override
@@ -126,6 +133,7 @@ class SessionBloc extends Bloc<SessionEvent, SessionState> {
     on<SessionStartRequested>(_onStart);
     on<SessionTick>(_onTick);
     on<SessionEndRequested>(_onEnd);
+    on<OverrideDetected>(_onOverrideDetected);
   }
 
   final SessionRepository _repo;
@@ -347,6 +355,16 @@ class SessionBloc extends Bloc<SessionEvent, SessionState> {
         durationMinutes: _durationMinutes,
         overrides: overrides,
       ));
+    }
+  }
+
+  void _onOverrideDetected(OverrideDetected e, Emitter<SessionState> emit) {
+    if (state is SessionActive) {
+      final s = state as SessionActive;
+      debugPrint('⚠️ Override detected mid-session: ${e.count}');
+      // Re-emit same state — UI can read overrides from ScreenTimeService separately
+      // No state change needed — just log it for now
+      // Future: emit SessionActive with overrideCount field
     }
   }
 

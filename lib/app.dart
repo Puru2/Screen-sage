@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:screensage/features/auth/data/repositories/auth_repository.dart';
 import 'package:screensage/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:screensage/main.dart';
 import 'core/router/app_router.dart';
+import 'core/services/screen_time_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/analytics/data/repositories/analytics_repository.dart';
 import 'features/analytics/presentation/bloc/analytics_bloc.dart';
@@ -42,15 +44,66 @@ class ScreenSageApp extends StatelessWidget {
               SettingsBloc(SettingsRepository())..add(SettingsLoadRequested()),
         ),
       ],
-      child: MaterialApp.router(
-        title: 'ScreenSage',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.dark,
-        // No light theme — app is dark-only by design
-        // This prevents OS light mode from overriding your UI
-        themeMode: ThemeMode.dark,
-        routerConfig: AppRouter.router,
+      child: _AppLifecycleBridge(
+        // ← wrap MaterialApp with this
+        child: MaterialApp.router(
+          title: 'ScreenSage',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.dark,
+          themeMode: ThemeMode.dark,
+          routerConfig: AppRouter.router,
+        ),
       ),
     );
   }
+}
+
+// Add this widget at the bottom of app.dart:
+class _AppLifecycleBridge extends StatefulWidget {
+  const _AppLifecycleBridge({required this.child});
+  final Widget child;
+
+  @override
+  State<_AppLifecycleBridge> createState() => _AppLifecycleBridgeState();
+}
+
+class _AppLifecycleBridgeState extends State<_AppLifecycleBridge>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
+    if (lifecycle == AppLifecycleState.resumed) _onResume();
+  }
+
+  Future<void> _onResume() async {
+    debugPrint('📱 App resumed');
+
+    // Premium refresh — premiumNotifier is global, always safe
+    await premiumNotifier.refresh();
+
+    // Override check — context is inside MultiBlocProvider ✅
+    if (!mounted) return;
+    final sessionBloc = context.read<SessionBloc>();
+    if (sessionBloc.state is SessionActive) {
+      final overrides = await ScreenTimeService.getOverrideCount();
+      debugPrint('⚠️ Override check on resume: $overrides');
+      if (overrides > 0) {
+        sessionBloc.add(OverrideDetected(overrides));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

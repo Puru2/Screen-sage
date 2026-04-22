@@ -11,7 +11,7 @@ import 'widgets/hero_painter.dart';
 
 class PaywallScreen extends StatefulWidget {
   const PaywallScreen({super.key, this.onSuccess});
-  final VoidCallback? onSuccess;
+  final Future<void> Function()? onSuccess;
 
   @override
   State<PaywallScreen> createState() => _PaywallScreenState();
@@ -25,6 +25,7 @@ class _PaywallScreenState extends State<PaywallScreen>
   bool _purchasing = false;
   bool _restoring = false;
   late AnimationController _bgPulse;
+  bool _showSuccess = false;
 
   @override
   void initState() {
@@ -47,12 +48,18 @@ class _PaywallScreenState extends State<PaywallScreen>
     if (!mounted) return;
     setState(() {
       _packages = packages;
-      // Default to annual if available — better value, better conversion
+      _loadingPackages = false;
+
+      if (packages.isEmpty) {
+        _selected = null; // ← safe, handled in UI below
+        return;
+      }
+
+      // Default to annual, fall back to first available — no null bang
       _selected = packages.firstWhere(
         (p) => p.packageType == PackageType.annual,
-        orElse: () => packages.isNotEmpty ? packages.first : _selected!,
+        orElse: () => packages.first, // ← removed _selected! bang
       );
-      _loadingPackages = false;
     });
   }
 
@@ -64,9 +71,14 @@ class _PaywallScreenState extends State<PaywallScreen>
     try {
       final success = await RevenueCatService.purchase(_selected!);
       if (!mounted) return;
+
       if (success) {
         HapticFeedback.heavyImpact();
-        widget.onSuccess?.call();
+        await widget.onSuccess?.call(); // ← now properly awaitable
+        if (!mounted) return;
+        setState(() => _showSuccess = true);
+        await Future.delayed(const Duration(milliseconds: 1200));
+        if (!mounted) return;
         Navigator.pop(context, true);
       }
     } on PurchasesErrorCode catch (e) {
@@ -89,7 +101,11 @@ class _PaywallScreenState extends State<PaywallScreen>
       if (!mounted) return;
       if (success) {
         HapticFeedback.heavyImpact();
-        widget.onSuccess?.call();
+        await widget.onSuccess?.call(); // ← properly awaitable
+        if (!mounted) return;
+        setState(() => _showSuccess = true);
+        await Future.delayed(const Duration(milliseconds: 1200));
+        if (!mounted) return;
         Navigator.pop(context, true);
       } else {
         _showError('No previous purchases found.');
@@ -264,11 +280,70 @@ class _PaywallScreenState extends State<PaywallScreen>
 
                         // ── Packages ──────────────────────────
                         if (_loadingPackages)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 20),
-                            child: const CircularProgressIndicator(
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 20),
+                            child: CircularProgressIndicator(
                               color: ScreenSageColors.accent,
                               strokeWidth: 2,
+                            ),
+                          )
+                        else if (_packages.isEmpty)
+                          // ← NEW — error state when RevenueCat config is broken
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            child: Container(
+                              padding: const EdgeInsets.all(18),
+                              decoration: BoxDecoration(
+                                color: ScreenSageColors.surface,
+                                borderRadius: BorderRadius.circular(16),
+                                border:
+                                    Border.all(color: ScreenSageColors.border),
+                              ),
+                              child: Column(
+                                children: [
+                                  const Text('😔',
+                                      style: TextStyle(fontSize: 32)),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'Could not load pricing',
+                                    style: ScreenSageTextStyles.titleMedium,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Check your connection and try again.',
+                                    style:
+                                        ScreenSageTextStyles.bodySmall.copyWith(
+                                      color: ScreenSageColors.textSecondary,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  GestureDetector(
+                                    onTap: () {
+                                      setState(() => _loadingPackages = true);
+                                      _loadPackages();
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 24, vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: ScreenSageColors.accentSurface,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                            color: ScreenSageColors.accent
+                                                .withOpacity(0.3)),
+                                      ),
+                                      child: Text(
+                                        'Retry',
+                                        style: ScreenSageTextStyles.bodyMedium
+                                            .copyWith(
+                                          color: ScreenSageColors.accent,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           )
                         else
@@ -299,6 +374,7 @@ class _PaywallScreenState extends State<PaywallScreen>
                   selected: _selected,
                   purchasing: _purchasing,
                   onPurchase: _purchase,
+                  showSuccess: _showSuccess,
                 ),
               ],
             ),
@@ -653,11 +729,13 @@ class _StickyBottom extends StatelessWidget {
     required this.selected,
     required this.purchasing,
     required this.onPurchase,
+    required this.showSuccess,
   });
 
   final Package? selected;
   final bool purchasing;
   final VoidCallback onPurchase;
+  final bool showSuccess;
 
   @override
   Widget build(BuildContext context) {
@@ -675,66 +753,117 @@ class _StickyBottom extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Main CTA
-          GestureDetector(
-            onTap: purchasing ? null : onPurchase,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              height: 58,
-              decoration: BoxDecoration(
-                gradient: purchasing
-                    ? null
-                    : const LinearGradient(
-                        colors: [
-                          ScreenSageColors.accent,
-                          ScreenSageColors.violet,
-                        ],
+          // ── Main CTA with success state ──────────────────
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            transitionBuilder: (child, animation) => ScaleTransition(
+              scale: CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutBack,
+              ),
+              child: FadeTransition(opacity: animation, child: child),
+            ),
+            child: showSuccess
+                // ── Success state ──
+                ? Container(
+                    key: const ValueKey('success'),
+                    height: 58,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: ScreenSageColors.accentSurface,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: ScreenSageColors.accent.withOpacity(0.4),
                       ),
-                color: purchasing ? ScreenSageColors.surface : null,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: purchasing
-                    ? null
-                    : [
-                        BoxShadow(
-                          color: ScreenSageColors.accent.withOpacity(0.35),
-                          blurRadius: 24,
-                          offset: const Offset(0, 8),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.check_circle_rounded,
+                          color: ScreenSageColors.accent,
+                          size: 22,
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Welcome to Premium! ✨',
+                          style: ScreenSageTextStyles.titleMedium.copyWith(
+                            color: ScreenSageColors.accent,
+                          ),
                         ),
                       ],
-              ),
-              child: Center(
-                child: purchasing
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: ScreenSageColors.accent,
-                        ),
-                      )
-                    : Text(
-                        'Start 7-Day Free Trial',
-                        style: ScreenSageTextStyles.titleMedium.copyWith(
-                          color: const Color(0xFF001A0F),
-                          fontWeight: FontWeight.w700,
-                        ),
+                    ),
+                  )
+                // ── Normal purchase button ──
+                : GestureDetector(
+                    key: const ValueKey('purchase'),
+                    onTap: (purchasing || selected == null) ? null : onPurchase,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      height: 58,
+                      decoration: BoxDecoration(
+                        gradient: (purchasing || selected == null)
+                            ? null
+                            : const LinearGradient(
+                                colors: [
+                                  ScreenSageColors.accent,
+                                  ScreenSageColors.violet,
+                                ],
+                              ),
+                        color: (purchasing || selected == null)
+                            ? ScreenSageColors.surface
+                            : null,
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: purchasing
+                            ? null
+                            : [
+                                BoxShadow(
+                                  color:
+                                      ScreenSageColors.accent.withOpacity(0.35),
+                                  blurRadius: 24,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
                       ),
-              ),
-            ),
+                      child: Center(
+                        child: purchasing
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: ScreenSageColors.accent,
+                                ),
+                              )
+                            : Text(
+                                'Start 7-Day Free Trial',
+                                style:
+                                    ScreenSageTextStyles.titleMedium.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
           ),
 
           const SizedBox(height: 10),
 
-          // Fine print
-          Text(
-            isAnnual
-                ? 'Free for 7 days · Then ${selected?.storeProduct.priceString ?? ''}/year · Cancel anytime'
-                : 'Free for 7 days · Then ${selected?.storeProduct.priceString ?? ''}/month · Cancel anytime',
-            style: ScreenSageTextStyles.bodySmall.copyWith(
-              color: ScreenSageColors.textTertiary,
-              fontSize: 11,
+          // ── Fine print — hide on success ─────────────────
+          AnimatedOpacity(
+            opacity: showSuccess ? 0.0 : 1.0,
+            duration: const Duration(milliseconds: 300),
+            child: Text(
+              isAnnual
+                  ? 'Free for 7 days · Then ${selected?.storeProduct.priceString ?? ''}/year · Cancel anytime'
+                  : 'Free for 7 days · Then ${selected?.storeProduct.priceString ?? ''}/month · Cancel anytime',
+              style: ScreenSageTextStyles.bodySmall.copyWith(
+                color: ScreenSageColors.textTertiary,
+                fontSize: 11,
+              ),
+              textAlign: TextAlign.center,
             ),
-            textAlign: TextAlign.center,
           ),
         ],
       ),

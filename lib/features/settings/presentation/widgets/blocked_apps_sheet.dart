@@ -24,12 +24,63 @@ class BlockedAppsSheetState extends State<BlockedAppsSheet> {
   }
 
   Future<void> _openPicker() async {
+    // Check if already authorized — skip warning if so
+    final status = await ScreenTimeService.getAuthorizationStatus();
+
+    if (status != 'approved' && mounted) {
+      // Show warning before Apple ID prompt appears
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: ScreenSageColors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            'Allow Screen Time Access',
+            style: ScreenSageTextStyles.titleMedium,
+          ),
+          content: Text(
+            'iOS will ask you to authorize ScreenSage with your Apple ID. '
+            'This is required to block apps during focus sessions.\n\n'
+            'Your app selections stay private on your device.',
+            style: ScreenSageTextStyles.bodyMedium.copyWith(
+              color: ScreenSageColors.textSecondary,
+              height: 1.5,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(
+                'Cancel',
+                style: ScreenSageTextStyles.bodyMedium.copyWith(
+                  color: ScreenSageColors.textTertiary,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(
+                'Continue',
+                style: ScreenSageTextStyles.bodyMedium.copyWith(
+                  color: ScreenSageColors.accent,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      if (proceed != true) return;
+    }
+
     setState(() => _loading = true);
     HapticFeedback.mediumImpact();
 
     await ScreenTimeService.showAppPicker();
 
-    // Re-fetch count after picker closes
     final updated = await ScreenTimeService.getSelectedAppCount();
     if (mounted) {
       setState(() {

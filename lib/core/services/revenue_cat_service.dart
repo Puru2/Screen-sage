@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
@@ -15,16 +17,6 @@ class RevenueCatService {
     final config = PurchasesConfiguration(_iosApiKey);
     await Purchases.configure(config);
     debugPrint('✅ RevenueCat initialized');
-  }
-
-  static Future<bool> isPremium() async {
-    try {
-      final info = await Purchases.getCustomerInfo();
-      return info.entitlements.active.containsKey(_entitlementId);
-    } catch (e) {
-      debugPrint('RevenueCat isPremium error: $e');
-      return false;
-    }
   }
 
   static Future<CustomerInfo?> getCustomerInfo() async {
@@ -116,6 +108,67 @@ class RevenueCatService {
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  // In revenue_cat_service.dart
+
+  static Future<bool> isPremium() async {
+    try {
+      final info = await Purchases.getCustomerInfo();
+      final entitlement = info.entitlements.active['Screen sage premium'];
+      final active = entitlement != null;
+
+      // Debug — print exactly what RevenueCat sees
+      debugPrint(
+          '🔑 Active entitlements: ${info.entitlements.active.keys.toList()}');
+      debugPrint('🔑 isPremium: $active');
+      if (entitlement != null) {
+        debugPrint('🔑 Expires: ${entitlement.expirationDate}');
+        debugPrint('🔑 Product: ${entitlement.productIdentifier}');
+      }
+
+      await _syncPremiumToFirestore(active, entitlement?.expirationDate);
+      return active;
+    } catch (e) {
+      debugPrint('❌ isPremium check failed: $e');
+      return false;
+    }
+  }
+
+  static Future<void> _syncPremiumToFirestore(
+      bool isPremium, String? expirationDate) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      DateTime? validTill;
+      if (expirationDate != null) {
+        validTill = DateTime.tryParse(expirationDate);
+      }
+
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'isPremium': isPremium,
+        'premiumUpdatedAt': FieldValue.serverTimestamp(),
+        'premiumValidTill': validTill != null
+            ? Timestamp.fromDate(validTill)
+            : null, // null = monthly (no known end) or expired
+        'premiumProductId': isPremium ? await _getActiveProductId() : null,
+      }, SetOptions(merge: true));
+
+      debugPrint(
+          '✅ Firestore synced → isPremium: $isPremium, validTill: $validTill');
+    } catch (e) {
+      debugPrint('❌ Firestore sync failed: $e');
+    }
+  }
+
+  static Future<String?> _getActiveProductId() async {
+    try {
+      final info = await Purchases.getCustomerInfo();
+      return info.entitlements.active['Screen sage premium']?.productIdentifier;
+    } catch (_) {
+      return null;
     }
   }
 }

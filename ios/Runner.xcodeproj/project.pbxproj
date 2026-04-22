@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		043F47632F97A0EB00E3BF36 /* Screen Sage : Focus and Earn.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 043F47622F97A0EB00E3BF36 /* Screen Sage : Focus and Earn.storekit */; };
 		04B758682F56DCBE00DB6EA7 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 04B758672F56DCBE00DB6EA7 /* StoreKit.framework */; };
 		04D767822F4E20FC00BAD0D6 /* ScreenSageShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D767812F4E20ED00BAD0D6 /* ScreenSageShared.swift */; };
 		04D767832F4E221400BAD0D6 /* ScreenSageShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D767812F4E20ED00BAD0D6 /* ScreenSageShared.swift */; };
@@ -93,6 +94,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		043F47622F97A0EB00E3BF36 /* Screen Sage : Focus and Earn.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Screen Sage : Focus and Earn.storekit"; sourceTree = "<group>"; };
+		043F47652F97A2CB00E3BF36 /* StoreKitTestCertificate.cer */ = {isa = PBXFileReference; lastKnownFileType = file; name = StoreKitTestCertificate.cer; path = ../../../StoreKitTestCertificate.cer; sourceTree = "<group>"; };
 		04B758672F56DCBE00DB6EA7 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		04D767812F4E20ED00BAD0D6 /* ScreenSageShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenSageShared.swift; sourceTree = "<group>"; };
 		04D767882F4E284800BAD0D6 /* AppPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPickerView.swift; sourceTree = "<group>"; };
@@ -301,6 +304,8 @@
 			isa = PBXGroup;
 			children = (
 				04DA63A32F4E18A0002EAD5F /* Runner.entitlements */,
+				043F47622F97A0EB00E3BF36 /* Screen Sage : Focus and Earn.storekit */,
+				043F47652F97A2CB00E3BF36 /* StoreKitTestCertificate.cer */,
 				97C146FA1CF9000F007C117D /* Main.storyboard */,
 				97C146FD1CF9000F007C117D /* Assets.xcassets */,
 				97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */,
@@ -503,6 +508,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */,
+				043F47632F97A0EB00E3BF36 /* Screen Sage : Focus and Earn.storekit in Resources */,
 				3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */,
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,
 				97C146FC1CF9000F007C117D /* Main.storyboard in Resources */,
@@ -1189,6 +1195,8 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = XUH4N3YGVK;
 				ENABLE_BITCODE = NO;
@@ -1200,6 +1208,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.pratham.screensage;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -1377,6 +1386,8 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = XUH4N3YGVK;
 				ENABLE_BITCODE = NO;
@@ -1388,6 +1399,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.pratham.screensage;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -1402,6 +1414,8 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = XUH4N3YGVK;
 				ENABLE_BITCODE = NO;
@@ -1413,6 +1427,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.pratham.screensage;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";

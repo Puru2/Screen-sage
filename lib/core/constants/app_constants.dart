@@ -64,7 +64,7 @@ class AppConstants {
   }
 
   // ── Entitlements (must match RevenueCat dashboard exactly) ──────
-  static const entitlementPremium = 'premium';
+  static const entitlementPremium = 'Screen sage premium';
 
   // ── App Group (must match Xcode capability) ──────────────────────
   static const appGroupId = 'group.com.pratham.screensage.data';

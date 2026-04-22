@@ -1,0 +1,149 @@
+{
+  "appPolicies" : {
+    "eula" : "",
+    "policies" : [
+      {
+        "locale" : "en_US",
+        "policyText" : "",
+        "policyURL" : ""
+      }
+    ]
+  },
+  "identifier" : "7EC6EC50",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_applicationInternalID" : "6759958644",
+    "_developerTeamID" : "XUH4N3YGVK",
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : 798466287.76013803,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Load Products"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Purchase"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Verification"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Store Sync"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Subscription Status"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Transaction"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Manage Subscriptions Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Refund Request Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Offer Code Redeem Sheet"
+      }
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21958675",
+      "localizations" : [
+
+      ],
+      "name" : "ScreenSage Premium",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "4.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "6759958732",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Enjoy the ScreenSage premium features for a month",
+              "displayName" : "ScreenSage Monthly Subscription",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "screensage.premium.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "ScreenSage monthly subscription",
+          "subscriptionGroupID" : "21958675",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "34.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6759958871",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Enjoy the ScreenSage premium features for a year",
+              "displayName" : "ScreenSage Yearly Subscription",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "screensage.premium.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "ScreenSage yearly subscription",
+          "subscriptionGroupID" : "21958675",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        }
+      ]
+    }
+  ],
+  "subscriptionOffersKeyPair" : {
+    "id" : "3ADC5EB8",
+    "privateKey" : "MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgdVnjg98HF5XnLW/77yOyjsDj1g7k/NhNmLS8EDQtJBugCgYIKoZIzj0DAQehRANCAARgh7dXkVi7WSCEnGW39ch64DKOhCOe8uRAcRwuXTKzLSW6LNRgf6ZDWvxzrY8BlsMR52KywzbNubM6/H1gsTD6"
+  },
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

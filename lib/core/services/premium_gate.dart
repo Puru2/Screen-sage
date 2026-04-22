@@ -19,7 +19,7 @@ class PremiumGateProvider extends InheritedNotifier<PremiumNotifier> {
 }
 
 class PremiumNotifier extends ChangeNotifier {
-  bool _isPremium = true;
+  bool _isPremium = false;
   int? _trialDaysLeft; // null = not in trial
   bool _loaded = false;
 
@@ -37,9 +37,27 @@ class PremiumNotifier extends ChangeNotifier {
     // return;
 
     // real code below — unreachable during testing
-    _isPremium = await RevenueCatService.isPremium();
-    _trialDaysLeft = await RevenueCatService.trialDaysRemaining();
-    _loaded = true;
+    try {
+      debugPrint('🔄 PremiumNotifier: refreshing...');
+      _isPremium = await RevenueCatService.isPremium();
+      _trialDaysLeft = await RevenueCatService.trialDaysRemaining();
+      _loaded = true;
+      debugPrint(
+          '🔄 PremiumNotifier: isPremium=$_isPremium, trial=$_trialDaysLeft');
+      notifyListeners();
+    } catch (e) {
+      debugPrint('❌ PremiumNotifier refresh failed: $e');
+      _loaded = true;
+      notifyListeners();
+    }
     notifyListeners();
+  }
+
+  // Call this right after a successful purchase — forces a fresh fetch
+  Future<void> refreshAfterPurchase() async {
+    debugPrint('💳 refreshAfterPurchase called — forcing CustomerInfo fetch');
+    // Small delay to let RevenueCat backend process the transaction
+    await Future.delayed(const Duration(milliseconds: 800));
+    await refresh();
   }
 }

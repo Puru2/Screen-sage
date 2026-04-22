@@ -244,6 +244,13 @@ import UserNotifications
         store.shield.applicationCategories = .specific(selection.categoryTokens)
       }
 
+      // ── ADD THIS — silence notifications from blocked apps ──────────
+      // if !selection.applicationTokens.isEmpty {
+      //   store.shield.applicationCategories = store.shield.applicationCategories  // keep existing
+      //   // Block notifications from selected apps
+      //   store.notifications.blocked = .specific(selection.applicationTokens)
+      // }
+
       // Build session window
       let now = Date()
       let endDate = Calendar.current.date(

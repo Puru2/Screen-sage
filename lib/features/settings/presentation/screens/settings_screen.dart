@@ -8,6 +8,7 @@ import '../../../../core/services/screen_time_service.dart';
 import '../../../../core/theme/color_scheme.dart';
 import '../../../../core/theme/text_styles.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../onboarding/presentation/screens/philosophy_onboarding.dart';
 import '../../../paywall/presentation/paywall_screen.dart';
 import '../../data/models/user_settings.dart';
 import '../bloc/settings_bloc.dart';
@@ -44,11 +45,18 @@ class _ProfileView extends StatefulWidget {
 class _ProfileViewState extends State<_ProfileView> {
   bool _isPremium = false;
   bool _premiumLoading = true;
+  int _blockedAppCount = 0;
 
   @override
   void initState() {
     super.initState();
     _checkPremium();
+    _loadBlockedAppCount();
+  }
+
+  Future<void> _loadBlockedAppCount() async {
+    final count = await ScreenTimeService.getSelectedAppCount();
+    if (mounted) setState(() => _blockedAppCount = count);
   }
 
   Future<void> _checkPremium() async {
@@ -265,7 +273,15 @@ class _ProfileViewState extends State<_ProfileView> {
                   SettingsItem(
                     icon: Icons.apps_outlined,
                     label: 'Blocked Apps',
-                    onTap: () => _showBlockedAppsSheet(context), // ← was empty
+                    trailing: _trailingValue(
+                      _blockedAppCount > 0
+                          ? '$_blockedAppCount app${_blockedAppCount == 1 ? '' : 's'}'
+                          : 'None',
+                    ),
+                    onTap: () async {
+                      await _showBlockedAppsSheet(context);
+                      _loadBlockedAppCount(); // refresh count after sheet closes
+                    },
                   ),
                 ],
               ).animate().fadeIn(delay: 400.ms),
@@ -280,6 +296,19 @@ class _ProfileViewState extends State<_ProfileView> {
 
               SettingsGroup(
                 items: [
+                  SettingsItem(
+                    icon: Icons.lightbulb_outline_rounded,
+                    label: 'Our Philosophy',
+                    trailing: _trailingValue('Why ScreenSage'),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const PhilosophyOnboarding(
+                          isFromSettings: true,
+                        ),
+                      ),
+                    ),
+                  ),
                   SettingsItem(
                     icon: Icons.help_outline,
                     label: 'Help & FAQ',
@@ -330,7 +359,8 @@ class _ProfileViewState extends State<_ProfileView> {
     final count = await ScreenTimeService.getSelectedAppCount();
     if (!mounted) return;
 
-    showModalBottomSheet(
+    await showModalBottomSheet(
+      // ← add await here
       context: context,
       backgroundColor: ScreenSageColors.surface,
       isScrollControlled: true,

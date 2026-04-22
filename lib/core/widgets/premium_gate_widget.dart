@@ -99,18 +99,24 @@ class PremiumGateWidget extends StatelessWidget {
   Future<void> _openPaywall(
       BuildContext context, PremiumNotifier notifier) async {
     HapticFeedback.mediumImpact();
-    await Navigator.push(
+
+    final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => PremiumGateProvider(
           notifier: notifier,
           child: PaywallScreen(
-            onSuccess: () => notifier.refresh(),
+            onSuccess: () => notifier.refreshAfterPurchase(), // ← changed
           ),
         ),
       ),
     );
-    await notifier.refresh();
+
+    // result == true means purchase succeeded
+    // refresh again on return just to be safe (handles edge cases)
+    if (result == true) {
+      await notifier.refresh();
+    }
   }
 }
 

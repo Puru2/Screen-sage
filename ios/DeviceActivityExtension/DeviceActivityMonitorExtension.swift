@@ -115,6 +115,7 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
     // Only set if non-empty to avoid overwriting with nil accidentally
     if !selection.applicationTokens.isEmpty {
       store.shield.applications = selection.applicationTokens
+      // store.notifications.blocked = .specific(selection.applicationTokens)
     }
     if !selection.categoryTokens.isEmpty {
       store.shield.applicationCategories = .specific(selection.categoryTokens)

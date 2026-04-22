@@ -43,7 +43,7 @@ class ShieldActionExtension: ShieldActionDelegate {
       // Primary = "Override (lose streak)" — RED button
       // User chose to break focus
       recordOverride()
-      //   ManagedSettingsStore().clearAllSettings()
+      ManagedSettingsStore().clearAllSettings()
       completionHandler(.close)  // Open the app
 
     case .secondaryButtonPressed:
