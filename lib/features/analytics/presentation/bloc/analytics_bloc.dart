@@ -49,6 +49,7 @@ class AnalyticsBloc extends Bloc<AnalyticsEvent, AnalyticsState> {
   }
 
   final AnalyticsRepository _repo;
+  AnalyticsRepository get repository => _repo;
   AnalyticsRange _currentRange = AnalyticsRange.week;
 
   Future<void> _onLoad(AnalyticsEvent e, Emitter<AnalyticsState> emit) async {

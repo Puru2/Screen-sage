@@ -27,9 +27,14 @@ class AuthSignOutRequested extends AuthEvent {}
 class AuthSignUpWithEmailRequested extends AuthEvent {
   final String email;
   final String password;
-  AuthSignUpWithEmailRequested({required this.email, required this.password});
+  final String username;
+  AuthSignUpWithEmailRequested({
+    required this.email,
+    required this.password,
+    required this.username,
+  });
   @override
-  List<Object?> get props => [email, password];
+  List<Object?> get props => [email, password, username];
 }
 
 class AuthSignInWithEmailRequested extends AuthEvent {
@@ -89,14 +94,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthPasswordResetRequested>(_onPasswordResetRequested);
     on<AuthSignOutRequested>(_onSignOut);
 
-    // Listen to Firebase Auth state changes globally
     _authSub = _repo.authStateChanges.listen((User? user) {
       add(AuthUserChanged(user));
     });
   }
 
-  void _onUserChanged(AuthUserChanged event, Emitter<AuthState> emit) {
+  Future<void> _onUserChanged(
+      AuthUserChanged event, Emitter<AuthState> emit) async {
     if (event.user != null) {
+      // Safety net: covers app restarts, persisted sessions, and any
+      // login path that didn't already call ensureUserDocument.
+      await _repo.ensureUserDocument(user: event.user!);
       emit(AuthSuccess(event.user!));
     } else {
       emit(Unauthenticated());
@@ -108,9 +116,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthLoading());
     try {
       final credential = await _repo.signInWithGoogle();
-      if (credential == null) {
+      final user = credential?.user;
+      if (user == null) {
         emit(Unauthenticated());
+        return;
       }
+      await _repo.ensureUserDocument(user: user);
+      // AuthSuccess will also be emitted by _authSub via AuthUserChanged
     } on FirebaseAuthException catch (e) {
       emit(AuthFailure(e.message ?? 'A Google Sign-In error occurred'));
     } catch (e) {
@@ -123,9 +135,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthLoading());
     try {
       final credential = await _repo.signInWithApple();
-      if (credential == null) {
+      final user = credential?.user;
+      if (user == null) {
         emit(Unauthenticated());
+        return;
       }
+      await _repo.ensureUserDocument(user: user);
     } on FirebaseAuthException catch (e) {
       emit(AuthFailure(e.message ?? 'An Apple Sign-In error occurred'));
     } catch (e) {
@@ -137,8 +152,25 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       AuthSignUpWithEmailRequested event, Emitter<AuthState> emit) async {
     emit(AuthLoading());
     try {
-      await _repo.signUpWithEmail(event.email, event.password);
-      // Success will be caught by _authSub
+      // Firebase Auth only ever receives email + password.
+      final credential = await _repo.signUpWithEmail(
+        event.email,
+        event.password,
+      );
+
+      final user = credential.user;
+      if (user == null) {
+        emit(AuthFailure('Sign up failed'));
+        emit(Unauthenticated());
+        return;
+      }
+
+      // username is app-only metadata, written to Firestore, not Auth.
+      await _repo.ensureUserDocument(
+        user: user,
+        username: event.username,
+      );
+      // AuthSuccess will follow via _authSub -> AuthUserChanged
     } on FirebaseAuthException catch (e) {
       emit(AuthFailure(e.message ?? 'Sign up failed'));
       emit(Unauthenticated());
@@ -152,8 +184,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       AuthSignInWithEmailRequested event, Emitter<AuthState> emit) async {
     emit(AuthLoading());
     try {
-      await _repo.signInWithEmail(event.email, event.password);
-      // Success will be caught by _authSub
+      final credential =
+          await _repo.signInWithEmail(event.email, event.password);
+      final user = credential.user;
+      if (user != null) {
+        await _repo.ensureUserDocument(user: user);
+      }
     } on FirebaseAuthException catch (e) {
       emit(AuthFailure(e.message ?? 'Sign in failed. Check your credentials.'));
       emit(Unauthenticated());

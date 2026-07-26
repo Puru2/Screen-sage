@@ -25,19 +25,22 @@ class _AuthView extends StatefulWidget {
 }
 
 class _AuthViewState extends State<_AuthView> {
+  final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _isLogin = true; // Toggles between Login and Sign Up
+  bool _isLogin = true;
   bool _obscurePassword = true;
 
   @override
   void dispose() {
+    _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
   void _submitAuth(BuildContext context) {
+    final username = _usernameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
@@ -48,13 +51,24 @@ class _AuthViewState extends State<_AuthView> {
       return;
     }
 
+    if (!_isLogin && username.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a username')),
+      );
+      return;
+    }
+
     if (_isLogin) {
       context.read<AuthBloc>().add(
             AuthSignInWithEmailRequested(email: email, password: password),
           );
     } else {
       context.read<AuthBloc>().add(
-            AuthSignUpWithEmailRequested(email: email, password: password),
+            AuthSignUpWithEmailRequested(
+              email: email,
+              password: password,
+              username: username,
+            ),
           );
     }
   }
@@ -119,7 +133,7 @@ class _AuthViewState extends State<_AuthView> {
                     children: [
                       const Spacer(),
 
-                      // ── Header ────────────────────────────────────────
+                      // ── Header ────────────────────────────────────
                       Text(
                         'Welcome to',
                         style: ScreenSageTextStyles.bodyLarge.copyWith(
@@ -146,7 +160,24 @@ class _AuthViewState extends State<_AuthView> {
 
                       const SizedBox(height: 32),
 
-                      // ── Input Fields ───────────────────────────────────
+                      // ── Username (Sign Up only) ───────────────────
+                      if (!_isLogin) ...[
+                        TextField(
+                          controller: _usernameController,
+                          enabled: !isLoading,
+                          style: ScreenSageTextStyles.bodyLarge,
+                          decoration: const InputDecoration(
+                            hintText: 'Username',
+                            prefixIcon: Icon(
+                              Icons.person_outline,
+                              color: ScreenSageColors.textTertiary,
+                            ),
+                          ),
+                        ).animate().fadeIn(delay: 350.ms),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // ── Email ──────────────────────────────────────
                       TextField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
@@ -161,6 +192,7 @@ class _AuthViewState extends State<_AuthView> {
 
                       const SizedBox(height: 16),
 
+                      // ── Password ────────────────────────────────────
                       TextField(
                         controller: _passwordController,
                         obscureText: _obscurePassword,
@@ -185,7 +217,7 @@ class _AuthViewState extends State<_AuthView> {
                         ),
                       ).animate().fadeIn(delay: 500.ms),
 
-                      // ── Forgot Password ──────────────────────────────
+                      // ── Forgot Password ────────────────────────────
                       if (_isLogin)
                         Align(
                           alignment: Alignment.centerRight,
@@ -201,7 +233,7 @@ class _AuthViewState extends State<_AuthView> {
                           ),
                         ).animate().fadeIn(delay: 550.ms)
                       else
-                        const SizedBox(height: 24), // Spacing when Sign Up
+                        const SizedBox(height: 24),
 
                       // ── Main Action Button ─────────────────────────
                       SizedBox(
@@ -242,7 +274,7 @@ class _AuthViewState extends State<_AuthView> {
 
                       const SizedBox(height: 16),
 
-                      // ── OR Divider ────────────────────────────────────
+                      // ── OR Divider ──────────────────────────────────
                       Row(
                         children: [
                           const Expanded(child: Divider()),
@@ -257,7 +289,7 @@ class _AuthViewState extends State<_AuthView> {
 
                       const SizedBox(height: 24),
 
-                      // ── Social Logins ─────────────────────────────────
+                      // ── Social Logins ───────────────────────────────
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
@@ -295,7 +327,7 @@ class _AuthViewState extends State<_AuthView> {
 
                       const Spacer(),
 
-                      // ── Legal ──────────────────────────────────────────
+                      // ── Legal ────────────────────────────────────────
                       Center(
                         child: Text(
                           'By continuing you agree to our Terms & Privacy Policy.',

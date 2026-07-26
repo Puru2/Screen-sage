@@ -1,12 +1,13 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../../../core/services/notification_service.dart';
+import '../../../../core/services/screen_time_service.dart';
 import '../../../earned_time/data/repositories/earned_time_repository.dart';
 import '../../../streak/data/repositories/streak_repository.dart';
 import '../../data/repositories/session_repository.dart';
-import '../../../../core/services/screen_time_service.dart';
 
 // ── Events ────────────────────────────────────────────────────────
 abstract class SessionEvent extends Equatable {
@@ -32,18 +33,14 @@ class SessionStartRequested extends SessionEvent {
 }
 
 class SessionEndRequested extends SessionEvent {
-  final bool completed;
+  final bool completed; // true = natural finish, false = user ended early
   SessionEndRequested({this.completed = false});
+
   @override
   List<Object?> get props => [completed];
 }
 
-class SessionTick extends SessionEvent {
-  final int remainingSeconds;
-  SessionTick(this.remainingSeconds);
-  @override
-  List<Object?> get props => [remainingSeconds];
-}
+class SessionTick extends SessionEvent {}
 
 class SessionAppPickerRequested extends SessionEvent {}
 
@@ -51,9 +48,12 @@ class SessionAuthorizationRequested extends SessionEvent {}
 
 class SessionResetRequested extends SessionEvent {}
 
+class SessionReconcileRequested extends SessionEvent {}
+
 class OverrideDetected extends SessionEvent {
   final int count;
   OverrideDetected(this.count);
+
   @override
   List<Object?> get props => [count];
 }
@@ -77,23 +77,52 @@ class SessionActive extends SessionState {
   final int totalSeconds;
   final int durationMinutes;
   final String sessionId;
-  final String intention; // ← add
-  final String focusMode; // ← add
+  final String intention;
+  final String focusMode;
   final String tag;
+  final int overrideCount;
+  final DateTime endAt;
 
-  SessionActive(
-      {required this.remainingSeconds,
-      required this.totalSeconds,
-      required this.durationMinutes,
-      required this.sessionId,
-      this.intention = '',
-      this.focusMode = 'deep',
-      this.tag = ''});
+  SessionActive({
+    required this.remainingSeconds,
+    required this.totalSeconds,
+    required this.durationMinutes,
+    required this.sessionId,
+    required this.endAt,
+    this.intention = '',
+    this.focusMode = 'deep',
+    this.tag = '',
+    this.overrideCount = 0,
+  });
 
   double get progress =>
       1.0 - (remainingSeconds / totalSeconds.clamp(1, totalSeconds));
   int get remainingMinutes => remainingSeconds ~/ 60;
   int get remainingSecondsDisplay => remainingSeconds % 60;
+
+  SessionActive copyWith({
+    int? remainingSeconds,
+    int? totalSeconds,
+    int? durationMinutes,
+    String? sessionId,
+    String? intention,
+    String? focusMode,
+    String? tag,
+    int? overrideCount,
+    DateTime? endAt,
+  }) {
+    return SessionActive(
+      remainingSeconds: remainingSeconds ?? this.remainingSeconds,
+      totalSeconds: totalSeconds ?? this.totalSeconds,
+      durationMinutes: durationMinutes ?? this.durationMinutes,
+      sessionId: sessionId ?? this.sessionId,
+      intention: intention ?? this.intention,
+      focusMode: focusMode ?? this.focusMode,
+      tag: tag ?? this.tag,
+      overrideCount: overrideCount ?? this.overrideCount,
+      endAt: endAt ?? this.endAt,
+    );
+  }
 
   @override
   List<Object?> get props => [
@@ -103,14 +132,21 @@ class SessionActive extends SessionState {
         sessionId,
         intention,
         focusMode,
-        tag
+        tag,
+        overrideCount,
+        endAt,
       ];
 }
 
 class SessionCompleted extends SessionState {
   final int durationMinutes;
   final int overrides;
-  SessionCompleted({required this.durationMinutes, required this.overrides});
+
+  SessionCompleted({
+    required this.durationMinutes,
+    required this.overrides,
+  });
+
   @override
   List<Object?> get props => [durationMinutes, overrides];
 }
@@ -120,6 +156,7 @@ class SessionCancelled extends SessionState {}
 class SessionError extends SessionState {
   final String message;
   SessionError(this.message);
+
   @override
   List<Object?> get props => [message];
 }
@@ -133,28 +170,33 @@ class SessionBloc extends Bloc<SessionEvent, SessionState> {
     on<SessionStartRequested>(_onStart);
     on<SessionTick>(_onTick);
     on<SessionEndRequested>(_onEnd);
+    on<SessionReconcileRequested>(_onReconcile);
     on<OverrideDetected>(_onOverrideDetected);
   }
 
   final SessionRepository _repo;
+  final EarnedTimeRepository _earnedRepo = EarnedTimeRepository();
+  final StreakRepository _streakRepo = StreakRepository();
+
   Timer? _timer;
   String? _currentSessionId;
   int _durationMinutes = 0;
-  final EarnedTimeRepository _earnedRepo = EarnedTimeRepository();
-  final StreakRepository _streakRepo = StreakRepository();
 
   Future<void> _onAuthorize(
     SessionAuthorizationRequested e,
     Emitter<SessionState> emit,
   ) async {
     emit(SessionAuthorizing());
+
     final status = await ScreenTimeService.getAuthorizationStatus();
     if (status == 'approved') {
-      emit(SessionIdle());
-    } else {
-      final granted = await ScreenTimeService.requestAuthorization();
-      emit(granted ? SessionIdle() : SessionNotAuthorized());
+      if (!emit.isDone) emit(SessionIdle());
+      return;
     }
+
+    final granted = await ScreenTimeService.requestAuthorization();
+    if (emit.isDone) return;
+    emit(granted ? SessionIdle() : SessionNotAuthorized());
   }
 
   Future<void> _onAppPicker(
@@ -163,209 +205,258 @@ class SessionBloc extends Bloc<SessionEvent, SessionState> {
   ) async {
     emit(SessionPickingApps());
     await ScreenTimeService.showAppPicker();
-    emit(SessionIdle());
+    if (!emit.isDone) emit(SessionIdle());
   }
 
   Future<void> _onStart(
     SessionStartRequested e,
     Emitter<SessionState> emit,
   ) async {
-    debugPrint('🟢 SessionBloc._onStart — ${e.durationMinutes} min');
-
     try {
-      // Step 1: Auth check
       final status = await ScreenTimeService.getAuthorizationStatus();
-      debugPrint('🔐 ScreenTime status: $status');
-
       if (status != 'approved') {
         emit(SessionAuthorizing());
         final granted = await ScreenTimeService.requestAuthorization();
-        debugPrint('🔐 Auth granted: $granted');
         if (!granted) {
           emit(SessionNotAuthorized());
           return;
         }
       }
 
-      // Step 2: Reset overrides
-      await ScreenTimeService.resetOverrideCount();
-      debugPrint('🔄 Override count reset');
-
-      // Step 3: Save to Firestore
-      debugPrint('💾 Creating Firestore session...');
-      final sessionId = await _repo.createSession(
-        durationMins: e.durationMinutes,
-        intention: e.intention, // ← from event, not hardcoded
-        focusMode: e.focusMode,
-        tag: e.tag,
-      );
-      debugPrint('✅ Firestore session created: $sessionId');
-
-      _currentSessionId = sessionId;
-      _durationMinutes = e.durationMinutes;
-
-      // Step 4: Start native blocking
-      debugPrint('📱 Starting native Screen Time blocking...');
-      final started = await ScreenTimeService.startSession(
-        durationMinutes: e.durationMinutes,
-      );
-      debugPrint('📱 Native blocking started: $started');
-
-      if (!started) {
-        // Clean up orphaned Firestore record
-        await _repo.completeSession(
-          sessionId: sessionId,
-          completedMins: 0,
-          overrides: 0,
-          completed: false,
-        );
-        await NotificationService.cancelStreakRisk();
-        _currentSessionId = null;
+      final selectedCount = await ScreenTimeService.getSelectedAppCount();
+      if (selectedCount == 0) {
         emit(SessionError(
           'Select apps to block first, then start your session.',
         ));
         return;
       }
 
-      // Step 5: Start timer
-      debugPrint('⏱ Starting timer: ${e.durationMinutes * 60}s');
-      _startTimer(e.durationMinutes * 60, sessionId, e.intention, e.focusMode,
-          e.tag, emit);
-    } catch (err, stack) {
-      debugPrint('❌ Session start failed: $err');
-      debugPrint('Stack: $stack');
-      emit(SessionError('Failed to start: ${err.toString()}'));
+      await ScreenTimeService.resetOverrideCount();
+
+      final started = await ScreenTimeService.startSession(
+        durationMinutes: e.durationMinutes,
+      );
+      if (!started) {
+        emit(SessionError(
+          'Could not start Screen Time blocking. Please try again.',
+        ));
+        return;
+      }
+
+      final sessionId = await _repo.createSession(
+        durationMins: e.durationMinutes,
+        intention: e.intention,
+        focusMode: e.focusMode,
+        tag: e.tag,
+      );
+
+      final endAt = DateTime.now().add(Duration(minutes: e.durationMinutes));
+
+      _currentSessionId = sessionId;
+      _durationMinutes = e.durationMinutes;
+
+      await NotificationService.scheduleSessionEndNotification(
+        sessionId: sessionId.hashCode,
+        endAt: endAt,
+        durationMinutes: e.durationMinutes,
+      );
+
+      _startForegroundTicker(
+        sessionId: sessionId,
+        totalSeconds: e.durationMinutes * 60,
+        durationMinutes: e.durationMinutes,
+        endAt: endAt,
+        intention: e.intention,
+        focusMode: e.focusMode,
+        tag: e.tag,
+        emit: emit,
+      );
+    } catch (err) {
+      emit(SessionError('Failed to start: $err'));
     }
   }
 
-  void _startTimer(
-    int totalSeconds,
-    String sessionId,
-    String intention,
-    String focusMode,
-    String tag,
-    Emitter<SessionState> emit,
-  ) {
-    int remaining = totalSeconds;
+  void _startForegroundTicker({
+    required String sessionId,
+    required int totalSeconds,
+    required int durationMinutes,
+    required DateTime endAt,
+    required String intention,
+    required String focusMode,
+    required String tag,
+    required Emitter<SessionState> emit,
+  }) {
+    _timer?.cancel();
+
+    final remaining =
+        endAt.difference(DateTime.now()).inSeconds.clamp(0, totalSeconds);
+
     emit(SessionActive(
       remainingSeconds: remaining,
       totalSeconds: totalSeconds,
-      durationMinutes: _durationMinutes,
+      durationMinutes: durationMinutes,
       sessionId: sessionId,
+      endAt: endAt,
       intention: intention,
       focusMode: focusMode,
       tag: tag,
     ));
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      remaining--;
-      if (remaining <= 0) {
-        timer.cancel();
-        add(SessionEndRequested(completed: true));
-      } else {
-        add(SessionTick(remaining));
-      }
+
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (isClosed) return;
+      add(SessionTick());
     });
   }
 
-  void _onTick(SessionTick e, Emitter<SessionState> emit) {
-    if (state is SessionActive) {
-      final s = state as SessionActive;
-      emit(SessionActive(
-        remainingSeconds: e.remainingSeconds,
-        totalSeconds: s.totalSeconds,
-        durationMinutes: s.durationMinutes,
-        sessionId: s.sessionId,
-        intention: s.intention,
-        focusMode: s.focusMode,
-        tag: s.tag,
-      ));
+  void _onTick(
+    SessionTick e,
+    Emitter<SessionState> emit,
+  ) {
+    final current = state;
+    if (current is! SessionActive) return;
+
+    final remaining = current.endAt.difference(DateTime.now()).inSeconds;
+
+    if (remaining <= 0) {
+      add(SessionEndRequested(completed: true));
+      return;
     }
+
+    emit(current.copyWith(remainingSeconds: remaining));
   }
 
   Future<void> _onEnd(
     SessionEndRequested e,
     Emitter<SessionState> emit,
   ) async {
-    debugPrint('🔴 SessionBloc._onEnd — completed: ${e.completed}');
     _timer?.cancel();
     _timer = null;
 
     final sessionId = _currentSessionId;
     if (sessionId == null) {
-      debugPrint('⚠️ No active session ID — resetting to idle');
       emit(SessionIdle());
       return;
     }
 
-    // Stop native blocking
+    final active = state is SessionActive ? state as SessionActive : null;
+
     await ScreenTimeService.endSession();
-    debugPrint('📱 Native blocking stopped');
-
-    // Get override count
     final overrides = await ScreenTimeService.getOverrideCount();
-    debugPrint('🔢 Overrides during session: $overrides');
 
-    // Calculate completed minutes
-    int completedMins = _durationMinutes;
-    if (state is SessionActive) {
-      final s = state as SessionActive;
-      final elapsedSeconds = s.totalSeconds - s.remainingSeconds;
-      // If completed naturally (timer ran out), award full duration
-      completedMins = e.completed
-          ? _durationMinutes // ✅ full duration
-          : (elapsedSeconds / 60).floor(); // partial if ended early
+    int completedMins;
+    if (e.completed) {
+      completedMins = _durationMinutes;
+    } else {
+      if (active == null) {
+        completedMins = 0;
+      } else {
+        final elapsedSeconds = active.totalSeconds - active.remainingSeconds;
+        completedMins =
+            (elapsedSeconds / 60).floor().clamp(0, _durationMinutes);
+      }
     }
-    debugPrint('⏱ Completed: ${completedMins}min of ${_durationMinutes}min');
 
-    // Save to Firestore
     try {
-      await _repo.completeSession(
+      await _repo.finalizeSession(
         sessionId: sessionId,
         completedMins: completedMins,
         overrides: overrides,
         completed: e.completed,
       );
-      debugPrint('✅ Session saved to Firestore');
     } catch (err) {
-      debugPrint('❌ Failed to save session: $err');
-      // Don't fail the whole flow — session still ended
+      debugPrint('❌ Failed to finalize session: $err');
     }
+
+    await NotificationService.cancelSessionEndNotification(sessionId.hashCode);
 
     _currentSessionId = null;
 
     if (e.completed) {
-      // Award earned time
       try {
         await _earnedRepo.addEarnedMinutes(completedMins);
-        debugPrint('💰 Awarded $completedMins earned minutes');
       } catch (err) {
-        debugPrint('❌ Earned time failed: $err');
+        debugPrint('❌ Earned minutes failed: $err');
       }
 
-      // Record streak
       try {
-        final streak = await _streakRepo.recordSession();
-        debugPrint('🔥 Streak: ${streak.currentStreak} days');
+        await _streakRepo.recordSession();
       } catch (err) {
-        debugPrint('❌ Streak record failed: $err');
+        debugPrint('❌ Streak update failed: $err');
       }
 
-      emit(SessionCompleted(
-        durationMinutes: _durationMinutes,
-        overrides: overrides,
-      ));
+      try {
+        await NotificationService.playCompletionFeedback();
+      } catch (err) {
+        debugPrint('❌ Completion feedback failed: $err');
+      }
+
+      if (!emit.isDone) {
+        emit(SessionCompleted(
+          durationMinutes: _durationMinutes,
+          overrides: overrides,
+        ));
+      }
+    } else {
+      if (!emit.isDone) emit(SessionCancelled());
     }
   }
 
-  void _onOverrideDetected(OverrideDetected e, Emitter<SessionState> emit) {
-    if (state is SessionActive) {
-      final s = state as SessionActive;
-      debugPrint('⚠️ Override detected mid-session: ${e.count}');
-      // Re-emit same state — UI can read overrides from ScreenTimeService separately
-      // No state change needed — just log it for now
-      // Future: emit SessionActive with overrideCount field
+  Future<void> _onReconcile(
+    SessionReconcileRequested e,
+    Emitter<SessionState> emit,
+  ) async {
+    try {
+      final active = await _repo.getActiveSession();
+      if (active == null) return;
+
+      final sessionId = active['id'] as String;
+      final durationMins = active['duration_mins'] as int? ?? 0;
+      final intention = active['intention'] as String? ?? '';
+      final focusMode = active['focus_mode'] as String? ?? 'deep';
+      final tag = active['tag'] as String? ?? '';
+      final expectedEndAt = (active['expected_end_at'] as Timestamp).toDate();
+
+      final now = DateTime.now();
+
+      if (now.isAfter(expectedEndAt) || now.isAtSameMomentAs(expectedEndAt)) {
+        _currentSessionId = sessionId;
+        _durationMinutes = durationMins;
+        add(SessionEndRequested(completed: true));
+        return;
+      }
+
+      final remaining = expectedEndAt.difference(now).inSeconds;
+      _currentSessionId = sessionId;
+      _durationMinutes = durationMins;
+
+      _timer?.cancel();
+      emit(SessionActive(
+        remainingSeconds: remaining,
+        totalSeconds: durationMins * 60,
+        durationMinutes: durationMins,
+        sessionId: sessionId,
+        endAt: expectedEndAt,
+        intention: intention,
+        focusMode: focusMode,
+        tag: tag,
+      ));
+
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (isClosed) return;
+        add(SessionTick());
+      });
+    } catch (err) {
+      debugPrint('❌ Session reconcile failed: $err');
     }
+  }
+
+  void _onOverrideDetected(
+    OverrideDetected e,
+    Emitter<SessionState> emit,
+  ) {
+    final current = state;
+    if (current is! SessionActive) return;
+    emit(current.copyWith(overrideCount: e.count));
   }
 
   @override

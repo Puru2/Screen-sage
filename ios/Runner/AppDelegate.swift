@@ -221,6 +221,15 @@ import UserNotifications
     }
 
     private func startSession(durationMinutes: Int, result: FlutterResult) {
+      guard durationMinutes >= 15 else {
+        result(
+          FlutterError(
+            code: "DURATION_TOO_SHORT",
+            message: "Sessions must be at least 15 minutes on iOS.",
+            details: nil
+          ))
+        return
+      }
       guard let data = ScreenSageShared.defaults?.data(forKey: ScreenSageShared.selectionKey),
         let selection = try? PropertyListDecoder().decode(
           FamilyActivitySelection.self, from: data

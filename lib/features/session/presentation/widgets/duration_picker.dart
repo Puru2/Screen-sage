@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/color_scheme.dart';
 import '../../../../core/theme/text_styles.dart';
-import '../bloc/session_bloc.dart';
 
 class DurationPicker extends StatefulWidget {
   const DurationPicker({
@@ -19,7 +17,7 @@ class DurationPicker extends StatefulWidget {
 }
 
 class _DurationPickerState extends State<DurationPicker> {
-  final _durations = [5, 10, 15, 25, 30, 45, 60, 90];
+  final _durations = [15, 25, 30, 45, 60, 90, 120];
 
   @override
   Widget build(BuildContext context) {

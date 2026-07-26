@@ -3,31 +3,6 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 class AppConstants {
   AppConstants._();
 
-  // ── Supabase ────────────────────────────────────────────────────
-  static String get supabaseUrl {
-    final value = dotenv.env['SUPABASE_URL'];
-    if (value == null) {
-      throw Exception('SUPABASE_URL not found in .env');
-    }
-    return value;
-  }
-
-  static String get supabaseAnonKey {
-    final value = dotenv.env['SUPABASE_ANON_KEY'];
-    if (value == null) {
-      throw Exception('SUPABSE ANON KEY not found in .env');
-    }
-    return value;
-  }
-
-  static String get supabasePublishableKey {
-    final value = dotenv.env['SUPABASE_PUBLISHABLE_KEY'];
-    if (value == null) {
-      throw Exception('SUPABSE PUBLISHABLE KEY not found in .env');
-    }
-    return value;
-  }
-
   static String get gcpWebClientID {
     final value =
         "876882658891-03jnu0kffvh8jt1184032o9kf9guh035.apps.googleusercontent.com";

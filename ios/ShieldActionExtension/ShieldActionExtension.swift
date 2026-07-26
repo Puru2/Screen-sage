@@ -41,18 +41,18 @@ class ShieldActionExtension: ShieldActionDelegate {
     switch action {
     case .primaryButtonPressed:
       // Primary = "Override (lose streak)" — RED button
-      // User chose to break focus
+      // User chose to break focus: record it, drop shields, let them in.
       recordOverride()
       ManagedSettingsStore().clearAllSettings()
-      completionHandler(.close)  // Open the app
+      completionHandler(.none)  // FIX: .none dismisses the shield and OPENS the app
 
     case .secondaryButtonPressed:
-      // Secondary = "Stay focused ✓" — GREEN button
-      // User chose to stay focused — send back to home screen
-      completionHandler(.defer)
+      // Secondary = "Stay focused ✓" — GREEN buttonse
+      // User chose to stay focused: kick them out to the home screen.
+      completionHandler(.close)  // FIX: .close shuts the distracting app down
 
     @unknown default:
-      completionHandler(.defer)
+      completionHandler(.close)
     }
   }
 

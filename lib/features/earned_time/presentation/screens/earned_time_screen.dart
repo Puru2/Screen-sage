@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -312,10 +311,11 @@ class _UnlockSuggestions extends StatelessWidget {
   // Static suggestions — will be replaced by real blocked apps list
   // once Scheduled Blocks feature is built
   static const _apps = [
-    _AppSuggestion(emoji: '📱', name: 'Social apps', mins: 30),
-    _AppSuggestion(emoji: '🎵', name: 'Music', mins: 20),
-    _AppSuggestion(emoji: '🎮', name: 'Games', mins: 45),
-    _AppSuggestion(emoji: '📺', name: 'Streaming', mins: 60),
+    _AppSuggestion(
+        icon: Icons.smartphone_rounded, name: 'Social apps', mins: 30),
+    _AppSuggestion(icon: Icons.music_note_rounded, name: 'Music', mins: 20),
+    _AppSuggestion(icon: Icons.sports_esports_rounded, name: 'Games', mins: 45),
+    _AppSuggestion(icon: Icons.tv_rounded, name: 'Streaming', mins: 60),
   ];
 
   @override
@@ -351,11 +351,11 @@ class _UnlockSuggestions extends StatelessWidget {
 }
 
 class _AppSuggestion {
-  final String emoji;
+  final IconData icon;
   final String name;
   final int mins;
   const _AppSuggestion(
-      {required this.emoji, required this.name, required this.mins});
+      {required this.icon, required this.name, required this.mins});
 }
 
 class _AppSuggestionCard extends StatelessWidget {
@@ -376,7 +376,7 @@ class _AppSuggestionCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(app.emoji, style: const TextStyle(fontSize: 20)),
+          Icon(app.icon, size: 24, color: ScreenSageColors.textPrimary),
           const SizedBox(height: 4),
           Text(app.name,
               style: ScreenSageTextStyles.labelSmall
@@ -603,14 +603,15 @@ class _FreeActiveView extends StatelessWidget {
                     // ── Emotional header ───────────────────────────
                     Column(
                       children: [
-                        Text('🎁', style: const TextStyle(fontSize: 64))
-                            .animate(onPlay: (c) => c.repeat(reverse: true))
-                            .scale(
-                              begin: const Offset(1.0, 1.0),
-                              end: const Offset(1.08, 1.08),
-                              duration: 1800.ms,
-                              curve: Curves.easeInOut,
-                            ),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: ScreenSageColors.accent.withOpacity(0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.redeem_rounded,
+                              size: 42, color: ScreenSageColors.accent),
+                        ).animate(onPlay: (c) => c.repeat(reverse: true)),
                         const SizedBox(height: 20),
                         Text('You\'re free.',
                             style: ScreenSageTextStyles.displayLarge.copyWith(
@@ -792,12 +793,12 @@ class _StatsSheet extends StatelessWidget {
             Row(
               children: [
                 _StatTile(
-                    icon: '⚡',
+                    icon: Icons.bolt_rounded,
                     label: 'Total Earned',
                     value: '${data.lifetimeEarned}m'),
                 const SizedBox(width: 10),
                 _StatTile(
-                    icon: '🎯',
+                    icon: Icons.track_changes_rounded,
                     label: 'Total Spent',
                     value: '${data.lifetimeSpent}m'),
               ],
@@ -806,10 +807,12 @@ class _StatsSheet extends StatelessWidget {
             Row(
               children: [
                 _StatTile(
-                    icon: '📊', label: 'Spend Rate', value: '$efficiency%'),
+                    icon: Icons.bar_chart_rounded,
+                    label: 'Spend Rate',
+                    value: '$efficiency%'),
                 const SizedBox(width: 10),
                 _StatTile(
-                    icon: '🏦',
+                    icon: Icons.account_balance_rounded,
                     label: 'Saved Up',
                     value: '${saved.clamp(0, 999)}m'),
               ],
@@ -846,7 +849,7 @@ class _StatsSheet extends StatelessWidget {
 class _StatTile extends StatelessWidget {
   const _StatTile(
       {required this.icon, required this.label, required this.value});
-  final String icon;
+  final IconData icon;
   final String label;
   final String value;
 
@@ -862,7 +865,7 @@ class _StatTile extends StatelessWidget {
         ),
         child: Column(
           children: [
-            Text(icon, style: const TextStyle(fontSize: 22)),
+            Icon(icon, size: 24, color: ScreenSageColors.textSecondary),
             const SizedBox(height: 6),
             Text(value,
                 style: ScreenSageTextStyles.titleMedium

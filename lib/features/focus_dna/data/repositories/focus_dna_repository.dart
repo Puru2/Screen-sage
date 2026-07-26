@@ -21,9 +21,10 @@ class FocusDNARepository {
         .get();
 
     final sessions = snap.docs.map((d) => _RawSession.fromDoc(d)).toList();
-    final completed = sessions.where((s) => s.completed).toList();
+    final finalized = sessions.where((s) => s.status != 'active').toList();
+    final completed = finalized.where((s) => s.completed).toList();
 
-    if (sessions.isEmpty) return _emptyDNA(user);
+    if (finalized.isEmpty) return _emptyDNA(user);
 
     // ── Streak data ──────────────────────────────────────────
     final streakSnap = await _db
@@ -37,8 +38,8 @@ class FocusDNARepository {
     final longestStreak = streakSnap.data()?['longest_streak'] as int? ?? 0;
 
     // ── Completion rate ──────────────────────────────────────
-    final completionRate = sessions.isNotEmpty
-        ? (completed.length / sessions.length * 100).round()
+    final completionRate = finalized.isNotEmpty
+        ? (completed.length / finalized.length * 100).round()
         : 0;
 
     // ── Total hours ──────────────────────────────────────────
@@ -99,17 +100,21 @@ class FocusDNARepository {
     }
 
     // ── Focus Score ───────────────────────────────────────────
-    final overrides = sessions.fold(0, (sum, s) => sum + s.overrides);
+    final overrides = finalized.fold(0, (sum, s) => sum + s.overrides);
+
+    final streakPoints = currentStreak * 10;
+    final completionPoints = completionRate * 2;
+    final totalHoursPoints = totalHours * 3;
+    final avgSessionPoints = (avgSessionMins * 1.5).round();
     final consistencyBonus = currentStreak >= 7 ? 100 : currentStreak * 10;
     final overridePenalty = (overrides * 2).clamp(0, 200);
 
-    final score = ((currentStreak * 10) +
-            (completionRate * 2) +
-            (totalHours * 3) +
-            (avgSessionMins * 1.5) +
+    final score = (streakPoints +
+            completionPoints +
+            totalHoursPoints +
+            avgSessionPoints +
             consistencyBonus -
             overridePenalty)
-        .round()
         .clamp(0, 9999);
 
     // ── Archetype ─────────────────────────────────────────────
@@ -128,6 +133,12 @@ class FocusDNARepository {
 
     final dna = FocusDNA(
       focusScore: score,
+      streakPoints: streakPoints,
+      completionPoints: completionPoints,
+      totalHoursPoints: totalHoursPoints,
+      avgSessionPoints: avgSessionPoints,
+      consistencyBonus: consistencyBonus,
+      overridePenalty: overridePenalty,
       archetype: archetype.name,
       archetypeDescription: archetype.description,
       peakHourRange: peakHourRange,
@@ -137,11 +148,12 @@ class FocusDNARepository {
       currentStreak: currentStreak,
       completionRate: completionRate,
       avgSessionMins: avgSessionMins,
-      totalSessions: sessions.length,
+      totalSessions: finalized.length,
       topPercentile: percentile,
       tagBreakdown: tagMap,
       userId: _uid,
       displayName: user.displayName ?? 'Focuser',
+      overrides: overrides,
     );
 
     debugPrint('🧬 DNA computed: score=$score archetype=${archetype.name}');
@@ -253,23 +265,29 @@ class FocusDNARepository {
   }
 
   FocusDNA _emptyDNA(User user) => FocusDNA(
-        focusScore: 0,
-        archetype: 'New Focuser',
-        archetypeDescription:
-            'Your story is just beginning. First session changes everything.',
-        peakHourRange: '–',
-        strongestDay: '–',
-        totalHoursAllTime: 0,
-        longestStreak: 0,
-        currentStreak: 0,
-        completionRate: 0,
-        avgSessionMins: 0,
-        totalSessions: 0,
-        topPercentile: 100,
-        tagBreakdown: {},
-        userId: user.uid,
-        displayName: user.displayName ?? 'Focuser',
-      );
+      focusScore: 0,
+      streakPoints: 0,
+      avgSessionPoints: 0,
+      completionPoints: 0,
+      consistencyBonus: 0,
+      overridePenalty: 0,
+      totalHoursPoints: 0,
+      archetype: 'New Focuser',
+      archetypeDescription:
+          'Your story is just beginning. First session changes everything.',
+      peakHourRange: 'N/A',
+      strongestDay: 'N/A',
+      totalHoursAllTime: 0,
+      longestStreak: 0,
+      currentStreak: 0,
+      completionRate: 0,
+      avgSessionMins: 0,
+      totalSessions: 0,
+      topPercentile: 100,
+      tagBreakdown: {},
+      userId: user.uid,
+      displayName: user.displayName ?? 'Focuser',
+      overrides: 0);
 }
 
 class _RawSession {
@@ -278,14 +296,15 @@ class _RawSession {
   final int overrides;
   final bool completed;
   final String tag;
+  final String status;
 
-  _RawSession({
-    required this.startedAt,
-    required this.completedMins,
-    required this.overrides,
-    required this.completed,
-    required this.tag,
-  });
+  _RawSession(
+      {required this.startedAt,
+      required this.completedMins,
+      required this.overrides,
+      required this.completed,
+      required this.tag,
+      required this.status});
 
   factory _RawSession.fromDoc(QueryDocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
@@ -295,6 +314,8 @@ class _RawSession {
       overrides: d['overrides'] as int? ?? 0,
       completed: d['completed'] as bool? ?? false,
       tag: d['tag'] as String? ?? '',
+      status: d['status'] as String? ??
+          ((d['completed'] == true) ? 'completed' : 'cancelled'),
     );
   }
 }

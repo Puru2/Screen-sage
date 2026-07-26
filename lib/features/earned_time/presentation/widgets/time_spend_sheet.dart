@@ -117,7 +117,15 @@ class _SpendTimeSheetState extends State<SpendTimeSheet> {
               ),
               child: Row(
                 children: [
-                  const Text('🔓', style: TextStyle(fontSize: 24)),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: ScreenSageColors.accent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.lock_open_rounded,
+                        size: 24, color: ScreenSageColors.accent),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -152,7 +160,7 @@ class _SpendTimeSheetState extends State<SpendTimeSheet> {
                           EarnedTimeSpendRequested(_selected),
                         );
                   },
-            icon: const Text('🎁', style: TextStyle(fontSize: 18)),
+            icon: const Icon(Icons.redeem_rounded, size: 20),
             label: Text('Unlock ${_selected}m of Free Time'),
           ).animate().fadeIn(delay: 200.ms),
         ],

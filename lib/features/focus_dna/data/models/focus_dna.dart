@@ -14,24 +14,37 @@ class FocusDNA {
   final Map<String, int> tagBreakdown;
   final String userId;
   final String displayName;
+  final int overrides;
+  final int streakPoints;
+  final int completionPoints;
+  final int totalHoursPoints;
+  final int avgSessionPoints;
+  final int consistencyBonus;
+  final int overridePenalty;
 
-  const FocusDNA({
-    required this.focusScore,
-    required this.archetype,
-    required this.archetypeDescription,
-    required this.peakHourRange,
-    required this.strongestDay,
-    required this.totalHoursAllTime,
-    required this.longestStreak,
-    required this.currentStreak,
-    required this.completionRate,
-    required this.avgSessionMins,
-    required this.totalSessions,
-    required this.topPercentile,
-    required this.tagBreakdown,
-    required this.userId,
-    required this.displayName,
-  });
+  const FocusDNA(
+      {required this.focusScore,
+      required this.archetype,
+      required this.archetypeDescription,
+      required this.peakHourRange,
+      required this.strongestDay,
+      required this.totalHoursAllTime,
+      required this.longestStreak,
+      required this.currentStreak,
+      required this.completionRate,
+      required this.avgSessionMins,
+      required this.totalSessions,
+      required this.topPercentile,
+      required this.tagBreakdown,
+      required this.userId,
+      required this.displayName,
+      required this.overrides,
+      required this.streakPoints,
+      required this.completionPoints,
+      required this.totalHoursPoints,
+      required this.avgSessionPoints,
+      required this.consistencyBonus,
+      required this.overridePenalty});
 
   // Score tier
   String get scoreTier {

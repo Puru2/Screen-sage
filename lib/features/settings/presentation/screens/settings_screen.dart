@@ -1,8 +1,11 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:purchases_flutter/models/entitlement_info_wrapper.dart';
+import 'package:purchases_flutter/purchases_flutter.dart';
 import '../../../../core/services/revenue_cat_service.dart';
 import '../../../../core/services/screen_time_service.dart';
 import '../../../../core/theme/color_scheme.dart';
@@ -46,12 +49,38 @@ class _ProfileViewState extends State<_ProfileView> {
   bool _isPremium = false;
   bool _premiumLoading = true;
   int _blockedAppCount = 0;
+  String? _username;
+  bool _usernameLoading = true;
 
   @override
   void initState() {
     super.initState();
     _checkPremium();
     _loadBlockedAppCount();
+    _loadUsername();
+  }
+
+  Future<void> _loadUsername() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) setState(() => _usernameLoading = false);
+      return;
+    }
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final data = snap.data();
+      if (mounted) {
+        setState(() {
+          _username = (data?['username'] as String?)?.trim();
+          _usernameLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _usernameLoading = false);
+    }
   }
 
   Future<void> _loadBlockedAppCount() async {
@@ -69,9 +98,25 @@ class _ProfileViewState extends State<_ProfileView> {
     }
   }
 
+  Future<void> _showManagePlanSheet(BuildContext context) async {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _ManagePlanSheet(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
+    final displayName = _usernameLoading
+        ? null
+        : (_username?.isNotEmpty == true
+            ? _username
+            : (user?.displayName?.isNotEmpty == true
+                ? user!.displayName
+                : 'ScreenSage User'));
 
     return Scaffold(
       backgroundColor: ScreenSageColors.background,
@@ -116,8 +161,7 @@ class _ProfileViewState extends State<_ProfileView> {
                                   fit: BoxFit.cover))
                           : Center(
                               child: Text(
-                                _getInitials(
-                                    user?.displayName ?? user?.email ?? 'U'),
+                                _getInitials(displayName ?? user?.email ?? 'U'),
                                 style: ScreenSageTextStyles.titleLarge
                                     .copyWith(color: ScreenSageColors.accent),
                               ),
@@ -128,11 +172,19 @@ class _ProfileViewState extends State<_ProfileView> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            user?.displayName ?? 'ScreenSage User',
-                            style: ScreenSageTextStyles.titleMedium,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          _usernameLoading
+                              ? const SizedBox(
+                                  height: 16,
+                                  width: 100,
+                                  child: LinearProgressIndicator(
+                                    minHeight: 2,
+                                  ),
+                                )
+                              : Text(
+                                  displayName ?? 'ScreenSage User',
+                                  style: ScreenSageTextStyles.titleMedium,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                           const SizedBox(height: 4),
                           Text(
                             user?.email ?? '',
@@ -162,12 +214,9 @@ class _ProfileViewState extends State<_ProfileView> {
                       ),
                     ),
                   );
-                  _checkPremium(); // refresh after paywall closes
+                  _checkPremium();
                 },
-                onManage: () {
-                  // Opens App Store subscription management
-                  RevenueCatService.openManageSubscriptions();
-                },
+                onManage: () => _showManagePlanSheet(context),
               ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.05),
 
               const SizedBox(height: 24),
@@ -187,7 +236,6 @@ class _ProfileViewState extends State<_ProfileView> {
 
                   return SettingsGroup(
                     items: [
-                      // Daily Goal
                       SettingsItem(
                         icon: Icons.flag_outlined,
                         label: 'Daily Focus Goal',
@@ -207,7 +255,6 @@ class _ProfileViewState extends State<_ProfileView> {
                         ),
                         onTap: () => _showDailyGoalSheet(context, settings),
                       ),
-                      // Default Duration
                       SettingsItem(
                         icon: Icons.timer_outlined,
                         label: 'Default Duration',
@@ -228,7 +275,6 @@ class _ProfileViewState extends State<_ProfileView> {
                         onTap: () =>
                             _showDefaultDurationSheet(context, settings),
                       ),
-                      // Default Focus Mode
                       SettingsItem(
                         icon: Icons.tune_outlined,
                         label: 'Default Focus Mode',
@@ -253,7 +299,6 @@ class _ProfileViewState extends State<_ProfileView> {
                   );
                 },
               ).animate().fadeIn(delay: 300.ms),
-
               const SizedBox(height: 24),
 
               // ── App Settings ────────────────────────────────────
@@ -280,7 +325,7 @@ class _ProfileViewState extends State<_ProfileView> {
                     ),
                     onTap: () async {
                       await _showBlockedAppsSheet(context);
-                      _loadBlockedAppCount(); // refresh count after sheet closes
+                      _loadBlockedAppCount();
                     },
                   ),
                 ],
@@ -665,19 +710,23 @@ class _ProfileViewState extends State<_ProfileView> {
     );
   }
 
-  String _fmtMins(int mins) {
-    if (mins < 60) return '${mins}m';
-    final h = mins ~/ 60;
-    final m = mins % 60;
-    return m == 0 ? '${h}h' : '${h}h ${m}m';
+  String _getInitials(String source) {
+    final trimmed = source.trim();
+    if (trimmed.isEmpty) return 'U';
+    final parts = trimmed.split(RegExp(r'\s+'));
+    if (parts.length == 1) {
+      return parts.first.substring(0, 1).toUpperCase();
+    }
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+        .toUpperCase();
   }
 
-  String _getInitials(String name) {
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    }
-    return name.isNotEmpty ? name[0].toUpperCase() : 'U';
+  String _fmtMins(int mins) {
+    final h = mins ~/ 60;
+    final m = mins % 60;
+    if (h == 0) return '${m}m';
+    if (m == 0) return '${h}h';
+    return '${h}h ${m}m';
   }
 
   void _showDeleteAccountDialog(BuildContext context) {
@@ -743,4 +792,208 @@ class _ProviderBadge extends StatelessWidget {
     if (providers.contains('apple.com')) return ' Apple';
     return '✉ Email';
   }
+}
+
+class _ManagePlanSheet extends StatefulWidget {
+  const _ManagePlanSheet();
+
+  @override
+  State<_ManagePlanSheet> createState() => _ManagePlanSheetState();
+}
+
+class _ManagePlanSheetState extends State<_ManagePlanSheet> {
+  bool _loading = true;
+  String? _productId;
+  String? _priceString;
+  DateTime? _expiresAt;
+  bool _willRenew = true;
+  PeriodType? _periodType;
+  String? _planName;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final info = await Purchases.getCustomerInfo();
+      final entitlement = info.entitlements.active['Screen sage premium'];
+
+      String? planName;
+      String? priceString;
+
+      try {
+        final packages = await RevenueCatService.getPackages();
+        final match = packages.firstWhere(
+          (p) => p.storeProduct.identifier == entitlement!.productIdentifier,
+          orElse: () => packages.first,
+        );
+        planName = match.storeProduct.title;
+        priceString = match.storeProduct.priceString;
+      } catch (_) {}
+
+      if (entitlement == null) {
+        setState(() => _loading = false);
+        return;
+      }
+
+      final expiry = entitlement.expirationDate != null
+          ? DateTime.tryParse(entitlement.expirationDate!)
+          : null;
+
+      try {
+        final packages = await RevenueCatService.getPackages();
+        final match = packages.firstWhere(
+          (p) => p.storeProduct.identifier == entitlement.productIdentifier,
+          orElse: () => packages.first,
+        );
+        priceString = match.storeProduct.priceString;
+      } catch (_) {}
+
+      setState(() {
+        _productId = entitlement.productIdentifier;
+        _planName = planName;
+        _priceString = priceString;
+        _expiresAt = expiry;
+        _willRenew = entitlement.willRenew;
+        _periodType = entitlement.periodType;
+        _loading = false;
+      });
+    } catch (_) {
+      setState(() => _loading = false);
+    }
+  }
+
+  String _fmtDate(DateTime d) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
+    return '${months[d.month - 1]} ${d.day}, ${d.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+        decoration: const BoxDecoration(
+          color: ScreenSageColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: ScreenSageColors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text('Your Plan', style: ScreenSageTextStyles.titleLarge),
+            const SizedBox(height: 20),
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 32),
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              )
+            else if (_productId == null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text(
+                  'No active subscription found.',
+                  style: ScreenSageTextStyles.bodyMedium
+                      .copyWith(color: ScreenSageColors.textSecondary),
+                ),
+              )
+            else ...[
+              _row('Plan', _planName ?? _productId ?? '—'),
+              if (_priceString != null) _row('Price', _priceString!),
+              if (_periodType != null)
+                _row(
+                    'Type',
+                    _periodType == PeriodType.trial
+                        ? 'Free Trial'
+                        : _periodType == PeriodType.intro
+                            ? 'Introductory'
+                            : 'Standard'),
+              if (_expiresAt != null)
+                _row(
+                  _willRenew ? 'Renews on' : 'Expires on',
+                  _fmtDate(_expiresAt!),
+                ),
+              _row('Auto-Renew', _willRenew ? 'On' : 'Off'),
+              const SizedBox(height: 20),
+              Text(
+                'To pause, cancel, or change your plan, manage it directly through the App Store.',
+                style: ScreenSageTextStyles.bodySmall
+                    .copyWith(color: ScreenSageColors.textTertiary),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    await RevenueCatService.openManageSubscriptions();
+                  },
+                  child: const Text('Manage in App Store'),
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  'Close',
+                  style: ScreenSageTextStyles.bodyMedium
+                      .copyWith(color: ScreenSageColors.textSecondary),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _row(String label, String value) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: ScreenSageTextStyles.bodyMedium
+                  .copyWith(color: ScreenSageColors.textSecondary),
+            ),
+            Text(
+              value,
+              style: ScreenSageTextStyles.bodyMedium
+                  .copyWith(fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      );
 }

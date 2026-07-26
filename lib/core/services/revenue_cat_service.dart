@@ -116,7 +116,8 @@ class RevenueCatService {
   static Future<bool> isPremium() async {
     try {
       final info = await Purchases.getCustomerInfo();
-      final entitlement = info.entitlements.active['Screen sage premium'];
+      debugPrint("info from ispremium : $info");
+      final entitlement = info.entitlements.active[_entitlementId];
       final active = entitlement != null;
 
       // Debug — print exactly what RevenueCat sees
@@ -166,7 +167,7 @@ class RevenueCatService {
   static Future<String?> _getActiveProductId() async {
     try {
       final info = await Purchases.getCustomerInfo();
-      return info.entitlements.active['Screen sage premium']?.productIdentifier;
+      return info.entitlements.active[_entitlementId]?.productIdentifier;
     } catch (_) {
       return null;
     }

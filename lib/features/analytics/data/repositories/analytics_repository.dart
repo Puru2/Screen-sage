@@ -72,8 +72,17 @@ class AnalyticsRepository {
         tag: d['tag'] as String? ?? '',
         intention: d['intention'] as String? ?? '',
         focusMode: d['focus_mode'] as String? ?? 'deep',
+        status: d['status'] as String? ??
+            ((d['completed'] == true) ? 'completed' : 'cancelled'),
       );
     }).toList();
+
+    final constellationSessions = allSessions
+        .where(
+            (s) => s.startedAt.isAfter(now.subtract(const Duration(days: 30))))
+        .where((s) => s.status != 'active')
+        .toList()
+      ..sort((a, b) => b.startedAt.compareTo(a.startedAt));
 
     // Range-filtered sessions
     final rangeStart = switch (range) {
@@ -81,8 +90,10 @@ class AnalyticsRepository {
       AnalyticsRange.week => weekStart,
       AnalyticsRange.month => monthStart,
     };
-    final rangeSessions =
-        allSessions.where((s) => s.startedAt.isAfter(rangeStart)).toList();
+    final rangeSessions = allSessions
+        .where((s) => s.startedAt.isAfter(rangeStart))
+        .where((s) => s.status != 'active')
+        .toList();
 
     // Core stats
     final todayMins = allSessions
@@ -181,16 +192,67 @@ class AnalyticsRepository {
       bestDayLabel: bestDayLabel,
       bestDayMins: bestDayMins,
       avgSessionMins: avgSessionMins,
-      recentSessions: rangeSessions.take(10).toList(),
+      recentSessions: rangeSessions.take(50).toList(),
       tagBreakdown: tagBreakdown,
       focusModeBreakdown: modeMap,
       activeRange: range,
+      constellationSessions: constellationSessions,
     );
   }
 
   String _dayLabel(DateTime date) {
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     return days[date.weekday - 1];
+  }
+
+  Future<void> syncNativeOverrides(int overrideCount) async {
+    if (overrideCount <= 0) return;
+
+    final uid = _uid;
+    debugPrint(
+        '💾 Committing $overrideCount overrides via Firestore WriteBatch...');
+
+    final batch = _db.batch();
+
+    // 1. Earned Time Penalty
+    // MUST match EarnedTimeRepository path: users/{uid}/earned_time/data
+    final earnedTimeRef =
+        _db.collection('users').doc(uid).collection('earned_time').doc('data');
+    batch.set(
+        earnedTimeRef,
+        {
+          // Using the exact key EarnedTimeData.fromMap expects
+          'balance_mins': FieldValue.increment(-(overrideCount * 15)),
+        },
+        SetOptions(merge: true));
+
+    // 2. Main User Stats
+    final userRef = _db.collection('users').doc(uid);
+    batch.set(
+        userRef,
+        {
+          'lifetime_overrides': FieldValue.increment(overrideCount),
+        },
+        SetOptions(merge: true));
+
+    // 3. Attach to recent session for Analytics charts
+    final recentSessions = await _db
+        .collection('sessions')
+        .where('user_id', isEqualTo: uid)
+        .orderBy('started_at', descending: true)
+        .limit(1)
+        .get();
+
+    if (recentSessions.docs.isNotEmpty) {
+      final lastSessionRef = recentSessions.docs.first.reference;
+      batch.update(lastSessionRef, {
+        'overrides': FieldValue.increment(overrideCount),
+      });
+    }
+
+    // 4. Complete atomic push
+    await batch.commit();
+    debugPrint('💾 Firestore batch sync complete.');
   }
 }
 
@@ -206,6 +268,7 @@ class AnalyticsSession {
   final String tag;
   final String intention;
   final String focusMode;
+  final String status;
 
   const AnalyticsSession({
     required this.id,
@@ -217,6 +280,7 @@ class AnalyticsSession {
     required this.tag,
     required this.intention,
     required this.focusMode,
+    required this.status,
   });
 }
 
@@ -243,25 +307,26 @@ class AnalyticsSummary {
   final List<TagStat> tagBreakdown;
   final Map<String, int> focusModeBreakdown;
   final AnalyticsRange activeRange;
+  final List<AnalyticsSession> constellationSessions;
 
-  const AnalyticsSummary({
-    required this.todayMins,
-    required this.weekMins,
-    required this.monthMins,
-    required this.rangeMins,
-    required this.completionRate,
-    required this.totalSessions,
-    required this.completedSessions,
-    required this.weekOverrides,
-    required this.dailyMins,
-    required this.bestDayLabel,
-    required this.bestDayMins,
-    required this.avgSessionMins,
-    required this.recentSessions,
-    required this.tagBreakdown,
-    required this.focusModeBreakdown,
-    required this.activeRange,
-  });
+  const AnalyticsSummary(
+      {required this.todayMins,
+      required this.weekMins,
+      required this.monthMins,
+      required this.rangeMins,
+      required this.completionRate,
+      required this.totalSessions,
+      required this.completedSessions,
+      required this.weekOverrides,
+      required this.dailyMins,
+      required this.bestDayLabel,
+      required this.bestDayMins,
+      required this.avgSessionMins,
+      required this.recentSessions,
+      required this.tagBreakdown,
+      required this.focusModeBreakdown,
+      required this.activeRange,
+      required this.constellationSessions});
 
   factory AnalyticsSummary.empty() => const AnalyticsSummary(
         todayMins: 0,
@@ -280,5 +345,6 @@ class AnalyticsSummary {
         tagBreakdown: [],
         focusModeBreakdown: {},
         activeRange: AnalyticsRange.week,
+        constellationSessions: [],
       );
 }

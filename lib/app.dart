@@ -10,6 +10,7 @@ import 'features/analytics/data/repositories/analytics_repository.dart';
 import 'features/analytics/presentation/bloc/analytics_bloc.dart';
 import 'features/earned_time/data/repositories/earned_time_repository.dart';
 import 'features/earned_time/presentation/bloc/earned_time_bloc.dart';
+import 'features/focus_dna/presentation/bloc/focus_dna_bloc.dart';
 import 'features/session/data/repositories/session_repository.dart';
 import 'features/session/presentation/bloc/session_bloc.dart';
 import 'features/settings/data/repositories/settings_repository.dart';
@@ -89,17 +90,45 @@ class _AppLifecycleBridgeState extends State<_AppLifecycleBridge>
   Future<void> _onResume() async {
     debugPrint('📱 App resumed');
 
-    // Premium refresh — premiumNotifier is global, always safe
+    // 1. Premium refresh stays global
     await premiumNotifier.refresh();
 
-    // Override check — context is inside MultiBlocProvider ✅
     if (!mounted) return;
-    final sessionBloc = context.read<SessionBloc>();
-    if (sessionBloc.state is SessionActive) {
-      final overrides = await ScreenTimeService.getOverrideCount();
-      debugPrint('⚠️ Override check on resume: $overrides');
-      if (overrides > 0) {
+
+    context.read<SessionBloc>().add(SessionReconcileRequested());
+
+    // 2. Read the native iOS App Group drop-box unconditionally
+    final overrides = await ScreenTimeService.getOverrideCount();
+    debugPrint('⚠️ Native override check on resume: $overrides');
+
+    if (overrides > 0) {
+      // 3. Clear iOS immediately so we never double-count data on multi-resumes
+      await ScreenTimeService.resetOverrideCount();
+
+      // 4. Update the active focus session state if one is running
+      final sessionBloc = context.read<SessionBloc>();
+      if (sessionBloc.state is SessionActive) {
         sessionBloc.add(OverrideDetected(overrides));
+      }
+
+      try {
+        // 5. Fire your single backend repository handler to update the database records
+        // This triggers the global Firebase batch write we mapped out
+        await context
+            .read<AnalyticsBloc>()
+            .repository
+            .syncNativeOverrides(overrides);
+
+        // 6. Alert the rest of your UI layers to reload their datasets from the server
+        if (mounted) {
+          context.read<AnalyticsBloc>().add(AnalyticsRefreshRequested());
+          context.read<EarnedTimeBloc>().add(EarnedTimeLoadRequested());
+          // If FocusDNABloc is registered higher up or managed under your repositories,
+          // dispatch its load request right here as well:
+          context.read<FocusDNABloc>().add(FocusDNALoadRequested());
+        }
+      } catch (e) {
+        debugPrint('❌ Failed to push overrides to backend: $e');
       }
     }
   }

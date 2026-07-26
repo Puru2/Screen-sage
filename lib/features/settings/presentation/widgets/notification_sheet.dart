@@ -34,28 +34,70 @@ class NotificationSheetState extends State<NotificationSheet> {
 
   Future<void> _save() async {
     setState(() => _saving = true);
-    final prefs = await SharedPreferences.getInstance();
 
-    if (_enabled) {
-      final name =
-          FirebaseAuth.instance.currentUser?.displayName?.split(' ').first ??
-              'there';
-      await NotificationService.scheduleDailyReminder(
-        hour: _hour,
-        minute: _minute,
-        name: name,
-      );
-      await prefs.setInt('notif_hour', _hour);
-      await prefs.setInt('notif_minute', _minute);
-      await prefs.setBool('notif_enabled', true);
-    } else {
-      await NotificationService.cancelAll();
-      await prefs.setBool('notif_enabled', false);
-    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
 
-    if (mounted) {
-      setState(() => _saving = false);
-      Navigator.pop(context);
+      if (_enabled) {
+        final granted = await NotificationService.requestPermission();
+
+        if (!granted) {
+          if (mounted) {
+            setState(() => _saving = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text(
+                  'Notifications are disabled. Please allow them to enable reminders.',
+                ),
+                backgroundColor: ScreenSageColors.danger,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            );
+          }
+          return;
+        }
+
+        final user = FirebaseAuth.instance.currentUser;
+        final rawName = user?.displayName?.split(' ').first;
+        final name = (rawName != null && rawName.trim().isNotEmpty)
+            ? rawName.trim()
+            : 'there';
+
+        await NotificationService.scheduleDailyReminder(
+          hour: _hour,
+          minute: _minute,
+          name: name,
+        );
+
+        await prefs.setInt('notif_hour', _hour);
+        await prefs.setInt('notif_minute', _minute);
+        await prefs.setBool('notif_enabled', true);
+      } else {
+        await NotificationService.cancelDailyReminder();
+        await prefs.setBool('notif_enabled', false);
+      }
+
+      if (mounted) {
+        setState(() => _saving = false);
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save reminder: $e'),
+            backgroundColor: ScreenSageColors.danger,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
     }
   }
 

@@ -1,12 +1,11 @@
-// lib/features/session/presentation/screens/session_home_screen.dart
-// Completely stripped and rebuilt
-
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../../../core/services/screen_time_service.dart';
 import '../../../../core/theme/color_scheme.dart';
 import '../../../../core/theme/text_styles.dart';
 import '../../../settings/data/models/user_settings.dart';
@@ -31,13 +30,18 @@ class _SessionHomeScreenState extends State<SessionHomeScreen> {
   FocusMode _selectedMode = FocusMode.deep;
   String _intention = '';
   String _selectedTag = '';
+  int _blockedAppCount = 0;
+  bool _loadingBlockedApps = false;
   final _intentionController = TextEditingController();
+  String? _username;
+  bool _usernameLoading = true;
 
   static const _tags = ['Study', 'Work', 'Reading', 'Exercise', 'Other'];
 
   @override
   void initState() {
     super.initState();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final s = context.read<SettingsBloc>().state;
       if (s is SettingsLoaded) {
@@ -51,7 +55,86 @@ class _SessionHomeScreenState extends State<SessionHomeScreen> {
           if (mounted && s is SettingsLoaded) _applyFromSettings(s.settings);
         });
       }
+
+      context.read<SessionBloc>().add(SessionReconcileRequested());
     });
+
+    _loadBlockedAppCount();
+    _loadUsername();
+  }
+
+  Future<void> _loadBlockedAppCount() async {
+    setState(() => _loadingBlockedApps = true);
+    try {
+      final count = await ScreenTimeService.getSelectedAppCount();
+      if (mounted) {
+        setState(() {
+          _blockedAppCount = count;
+          _loadingBlockedApps = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _loadingBlockedApps = false);
+      }
+    }
+  }
+
+  Future<void> _openAppPicker() async {
+    context.read<SessionBloc>().add(SessionAppPickerRequested());
+    await Future.delayed(const Duration(milliseconds: 400));
+    await _loadBlockedAppCount();
+  }
+
+  Future<void> _start(BuildContext context) async {
+    FocusScope.of(context).unfocus();
+    HapticFeedback.mediumImpact();
+
+    if (_selectedDuration < 15) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Sessions must be at least 15 minutes due to iOS Screen Time limitations.',
+          ),
+          backgroundColor: ScreenSageColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
+    }
+
+    final latestCount = await ScreenTimeService.getSelectedAppCount();
+    if (!mounted) return;
+
+    setState(() => _blockedAppCount = latestCount);
+
+    if (latestCount == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+              'Select apps to block first, then start your session.'),
+          backgroundColor: ScreenSageColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
+    }
+
+    context.read<SessionBloc>().add(
+          SessionStartRequested(
+            _selectedDuration,
+            intention: _intention.trim(),
+            focusMode: _selectedMode.typeString,
+            tag: _selectedTag,
+          ),
+        );
+
+    _intentionController.clear();
+    _intention = '';
   }
 
   void _applyFromSettings(UserSettings s) {
@@ -65,6 +148,29 @@ class _SessionHomeScreenState extends State<SessionHomeScreen> {
   void dispose() {
     _intentionController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadUsername() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) setState(() => _usernameLoading = false);
+      return;
+    }
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final data = snap.data();
+      if (mounted) {
+        setState(() {
+          _username = (data?['username'] as String?)?.trim();
+          _usernameLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _usernameLoading = false);
+    }
   }
 
   @override
@@ -154,7 +260,14 @@ class _SessionHomeScreenState extends State<SessionHomeScreen> {
         : hour < 17
             ? 'Good afternoon'
             : 'Good evening';
-    final name = user?.displayName?.split(' ').first ?? 'there';
+    // final name = user?.displayName?.split(' ').first ?? 'there';
+    final displayName = _usernameLoading
+        ? null
+        : (_username?.isNotEmpty == true
+            ? _username
+            : (user?.displayName?.isNotEmpty == true
+                ? user!.displayName
+                : 'there'));
 
     return CustomScrollView(
       slivers: [
@@ -172,7 +285,7 @@ class _SessionHomeScreenState extends State<SessionHomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '$greeting, $name',
+                          '$greeting, $displayName',
                           style: ScreenSageTextStyles.bodyMedium.copyWith(
                             color: ScreenSageColors.textSecondary,
                           ),
@@ -248,10 +361,10 @@ class _SessionHomeScreenState extends State<SessionHomeScreen> {
 
               // ── App Picker ────────────────────────────────────
               _AppPickerTile(
-                onTap: () => context
-                    .read<SessionBloc>()
-                    .add(SessionAppPickerRequested()),
-              ).animate().fadeIn(delay: 300.ms),
+                blockedAppCount: _blockedAppCount,
+                loading: _loadingBlockedApps,
+                onTap: _openAppPicker,
+              ),
 
               const SizedBox(height: 28),
 
@@ -263,7 +376,7 @@ class _SessionHomeScreenState extends State<SessionHomeScreen> {
                   icon: const Icon(
                     Icons.play_arrow_rounded,
                     size: 22,
-                    color: ScreenSageColors.textPrimary,
+                    color: ScreenSageColors.background,
                   ),
                   label: Text('Start ${_selectedMode.label}'),
                 ),
@@ -275,21 +388,6 @@ class _SessionHomeScreenState extends State<SessionHomeScreen> {
         ),
       ],
     );
-  }
-
-  void _start(BuildContext context) {
-    FocusScope.of(context).unfocus();
-    HapticFeedback.mediumImpact();
-    context.read<SessionBloc>().add(
-          SessionStartRequested(
-            _selectedDuration,
-            intention: _intention.trim(),
-            focusMode: _selectedMode.typeString,
-            tag: _selectedTag,
-          ),
-        );
-    _intentionController.clear();
-    _intention = '';
   }
 }
 
@@ -560,11 +658,20 @@ class _IntentionCard extends StatelessWidget {
 
 // ── App Picker Tile ───────────────────────────────────────────────
 class _AppPickerTile extends StatelessWidget {
-  const _AppPickerTile({required this.onTap});
+  const _AppPickerTile({
+    required this.onTap,
+    required this.blockedAppCount,
+    this.loading = false,
+  });
+
   final VoidCallback onTap;
+  final int blockedAppCount;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
+    final hasApps = blockedAppCount > 0;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -573,16 +680,31 @@ class _AppPickerTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: ScreenSageColors.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: ScreenSageColors.border),
+          border: Border.all(
+            color: hasApps
+                ? ScreenSageColors.accent.withOpacity(0.35)
+                : ScreenSageColors.border,
+          ),
         ),
         child: Row(
           children: [
-            const Icon(Icons.apps_rounded,
-                color: ScreenSageColors.textSecondary, size: 20),
+            Icon(
+              hasApps ? Icons.shield_outlined : Icons.apps_rounded,
+              color: hasApps
+                  ? ScreenSageColors.accent
+                  : ScreenSageColors.textSecondary,
+              size: 20,
+            ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text('Select Apps to Block',
-                  style: ScreenSageTextStyles.bodyMedium),
+              child: Text(
+                loading
+                    ? 'Loading app selection...'
+                    : hasApps
+                        ? '$blockedAppCount app${blockedAppCount == 1 ? '' : 's'} selected'
+                        : 'Select Apps to Block',
+                style: ScreenSageTextStyles.bodyMedium,
+              ),
             ),
             const Icon(Icons.chevron_right,
                 color: ScreenSageColors.textTertiary, size: 18),

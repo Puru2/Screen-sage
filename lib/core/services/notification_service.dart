@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
@@ -6,6 +7,11 @@ import 'package:timezone/timezone.dart' as tz;
 class NotificationService {
   static final _plugin = FlutterLocalNotificationsPlugin();
   static bool _initialized = false;
+
+  static const int dailyReminderId = 1;
+  static const int streakRiskId = 2;
+
+  static Future<void> cancelDailyReminder() => _plugin.cancel(dailyReminderId);
 
   static Future<void> init() async {
     if (_initialized) return;
@@ -55,7 +61,7 @@ class NotificationService {
     }
 
     await _plugin.zonedSchedule(
-      1,
+      dailyReminderId,
       'Time to focus, $name 🌿',
       'Your streak is waiting. Start a session now.',
       scheduled,
@@ -68,7 +74,7 @@ class NotificationService {
           interruptionLevel: InterruptionLevel.timeSensitive,
         ),
       ),
-      matchDateTimeComponents: DateTimeComponents.time, // repeat daily
+      matchDateTimeComponents: DateTimeComponents.time,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
     );
     debugPrint('✅ Daily reminder set for $hour:$minute');
@@ -101,9 +107,43 @@ class NotificationService {
     );
   }
 
+  static Future<void> scheduleSessionEndNotification({
+    required int sessionId,
+    required DateTime endAt,
+    required int durationMinutes,
+  }) async {
+    final scheduled = tz.TZDateTime.from(endAt, tz.local);
+
+    await _plugin.zonedSchedule(
+      sessionId,
+      'Focus session complete ✨',
+      '$durationMinutes minute session finished.',
+      scheduled,
+      const NotificationDetails(
+        iOS: DarwinNotificationDetails(
+          sound: 'default',
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+          interruptionLevel: InterruptionLevel.timeSensitive,
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+    );
+  }
+
+  static Future<void> cancelSessionEndNotification(int sessionId) async {
+    await _plugin.cancel(sessionId);
+  }
+
+  static Future<void> playCompletionFeedback() async {
+    await HapticFeedback.heavyImpact();
+    SystemSound.play(SystemSoundType.alert);
+  }
+
   // ── Cancel all ───────────────────────────────────────────
   static Future<void> cancelAll() => _plugin.cancelAll();
 
   // ── Cancel streak risk (call when session completes) ─────
-  static Future<void> cancelStreakRisk() => _plugin.cancel(2);
+  static Future<void> cancelStreakRisk() => _plugin.cancel(streakRiskId);
 }

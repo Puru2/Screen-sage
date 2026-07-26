@@ -2,6 +2,7 @@
 
 import 'dart:convert';
 import 'dart:math';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -13,9 +14,7 @@ ValueNotifier<AuthRepository> authRepositoryProvider =
 
 class AuthRepository {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-
-  // Maintain a single instance for the repository lifecycle.
-  // No scopes defined here anymore.
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
 
   // ─────────────────────────────────────────────────────────────
@@ -25,20 +24,15 @@ class AuthRepository {
   User? get currentUser => _auth.currentUser;
 
   // ─────────────────────────────────────────────────────────────
-  // Google Sign In (LATEST 7.x.x APPROACH)
+  // Google Sign In
   // ─────────────────────────────────────────────────────────────
   Future<UserCredential?> signInWithGoogle() async {
     try {
       debugPrint("Starting Google Sign-In flow...");
-
-      // Force account picker by clearing any previous cached sessions
       await _googleSignIn.signOut();
 
       GoogleSignInAccount? googleUser;
-
-      // The new standard: check if the platform supports the new authenticate() flow
       if (_googleSignIn.supportsAuthenticate()) {
-        debugPrint("Platform supports authenticate(). Proceeding...");
         googleUser = await _googleSignIn.authenticate();
       }
 
@@ -47,19 +41,13 @@ class AuthRepository {
         return null;
       }
 
-      debugPrint("Google Auth successful. Fetching tokens...");
-
-      // Retrieve the authentication tokens required by Firebase
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
 
-      // Create the Firebase credential
-      // Note: We need both accessToken and idToken for a robust login.
       final OAuthCredential credential = GoogleAuthProvider.credential(
         idToken: googleAuth.idToken,
       );
 
-      debugPrint("Authenticating with Firebase...");
       return await _auth.signInWithCredential(credential);
     } catch (e) {
       debugPrint("Google Sign-In Error: $e");
@@ -68,7 +56,7 @@ class AuthRepository {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Apple Sign In (Correct Nonce Handling)
+  // Apple Sign In
   // ─────────────────────────────────────────────────────────────
   Future<UserCredential?> signInWithApple() async {
     try {
@@ -95,7 +83,7 @@ class AuthRepository {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Email & Password
+  // Email & Password — Firebase Auth only needs email + password
   // ─────────────────────────────────────────────────────────────
   Future<UserCredential> signUpWithEmail(String email, String password) async {
     return await _auth.createUserWithEmailAndPassword(
@@ -111,17 +99,14 @@ class AuthRepository {
     );
   }
 
-  // reset password
   Future<void> resetPassword(String email) async {
     await _auth.sendPasswordResetEmail(email: email.trim());
   }
 
-  // update username
   Future<void> updateUserName(String username) async {
     await currentUser?.updateDisplayName(username);
   }
 
-  // delete account
   Future<void> deleteAccount(String email, String password) async {
     AuthCredential credential =
         EmailAuthProvider.credential(email: email.trim(), password: password);
@@ -130,7 +115,6 @@ class AuthRepository {
     await _auth.signOut();
   }
 
-  // reset current password
   Future<void> resetCurrentPassword(
       String newPassword, String oldPassword, String email) async {
     AuthCredential credential = EmailAuthProvider.credential(
@@ -140,10 +124,34 @@ class AuthRepository {
   }
 
   // ─────────────────────────────────────────────────────────────
+  // Firestore user profile — created ONCE, only after Auth succeeds
+  // username is app metadata only — never touches FirebaseAuth calls
+  // ─────────────────────────────────────────────────────────────
+  Future<void> ensureUserDocument({
+    required User user,
+    String? username,
+  }) async {
+    final userRef = _db.collection('users').doc(user.uid);
+    final snap = await userRef.get();
+
+    if (snap.exists) return; // already created — never overwrite
+
+    await userRef.set({
+      'uid': user.uid,
+      'email': user.email ?? '',
+      'username': username?.trim() ?? (user.displayName ?? ''),
+      'createdAt': FieldValue.serverTimestamp(),
+      'isPremium': false,
+      'premiumProductId': null,
+      'premiumValidTill': null,
+      'premiumUpdatedAt': null,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
   // Sign Out
   // ─────────────────────────────────────────────────────────────
   Future<void> signOut() async {
-    // Disconnect revokes the Google scopes and clears the session completely
     try {
       await _googleSignIn.disconnect();
     } catch (e) {
@@ -159,7 +167,6 @@ class AuthRepository {
     const charset =
         '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
     final random = Random.secure();
-
     return List.generate(
       length,
       (_) => charset[random.nextInt(charset.length)],

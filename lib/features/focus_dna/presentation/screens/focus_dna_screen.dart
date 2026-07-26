@@ -226,7 +226,7 @@ class _FocusDNAViewState extends State<_FocusDNAView> {
                       featureName: 'Focus Constellation',
                       style: GateStyle.overlay,
                       child: FocusConstellation(
-                        sessions: snap.data!.recentSessions,
+                        sessions: snap.data!.constellationSessions,
                       ),
                     ).animate().fadeIn(delay: 300.ms);
                   },
@@ -558,6 +558,13 @@ class _StatsGrid extends StatelessWidget {
         sub: dna.strongestDay,
         color: ScreenSageColors.violet,
       ),
+      _GridStat(
+        icon: Icons.shield_rounded,
+        label: 'Shield Breaks',
+        value: '${dna.overrides}',
+        sub: 'Overrides this week',
+        color: ScreenSageColors.danger, // Use a red/warning color
+      ),
     ];
 
     return GridView.builder(
@@ -719,6 +726,13 @@ class _ScoreExplainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final total = dna.streakPoints +
+        dna.completionPoints +
+        dna.totalHoursPoints +
+        dna.avgSessionPoints +
+        dna.consistencyBonus -
+        dna.overridePenalty;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -740,21 +754,67 @@ class _ScoreExplainer extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _ScoreRow(
-              label: 'Streak',
-              value: dna.currentStreak * 10,
-              color: ScreenSageColors.amber),
+            label: 'Streak',
+            value: dna.streakPoints,
+            color: ScreenSageColors.amber,
+          ),
           _ScoreRow(
-              label: 'Completion rate',
-              value: dna.completionRate * 2,
-              color: ScreenSageColors.violet),
+            label: 'Completion rate',
+            value: dna.completionPoints,
+            color: ScreenSageColors.violet,
+          ),
           _ScoreRow(
-              label: 'Total hours focused',
-              value: dna.totalHoursAllTime * 3,
-              color: ScreenSageColors.accent),
+            label: 'Total hours focused',
+            value: dna.totalHoursPoints,
+            color: ScreenSageColors.accent,
+          ),
           _ScoreRow(
-              label: 'Avg session quality',
-              value: (dna.avgSessionMins * 1.5).round(),
-              color: ScreenSageColors.accent),
+            label: 'Avg session quality',
+            value: dna.avgSessionPoints,
+            color: ScreenSageColors.accent,
+          ),
+          _ScoreRow(
+            label: 'Consistency bonus',
+            value: dna.consistencyBonus,
+            color: ScreenSageColors.accent,
+          ),
+          if (dna.overridePenalty > 0)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Shield overrides',
+                      style: ScreenSageTextStyles.bodyMedium,
+                    ),
+                  ),
+                  Text(
+                    '-${dna.overridePenalty} pts',
+                    style: ScreenSageTextStyles.bodyMedium.copyWith(
+                      color: ScreenSageColors.danger,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const Divider(),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Total',
+                  style: ScreenSageTextStyles.labelMedium,
+                ),
+              ),
+              Text(
+                '$total pts',
+                style: ScreenSageTextStyles.labelMedium.copyWith(
+                  color: ScreenSageColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

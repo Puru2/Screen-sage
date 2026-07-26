@@ -560,14 +560,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.0"
-  home_widget:
-    dependency: "direct main"
-    description:
-      name: home_widget
-      sha256: d794a73894012459a4c63b94a6dc2cb3ccaa6eb08fb15b974aa7ac642594aed5
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.9.0"
   http:
     dependency: transitive
     description:
@@ -948,10 +940,10 @@ packages:
     dependency: "direct main"
     description:
       name: purchases_flutter
-      sha256: "83f58c4ef331c06af0548b009632ec2c45b119b87bf02a74f8f77a40e0f64bad"
+      sha256: "8d34712aa3201f675eeccaacf45c0b7b025575fc9d0378b2619bb61246e76064"
       url: "https://pub.dev"
     source: hosted
-    version: "6.30.2"
+    version: "8.11.0"
   realtime_client:
     dependency: transitive
     description:
@@ -1174,7 +1166,7 @@ packages:
     source: hosted
     version: "1.4.0"
   url_launcher:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: url_launcher
       sha256: f6a7e5c4835bb4e3026a04793a4199ca2d14c739ec378fdfe23fc8075d0439f8

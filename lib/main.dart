@@ -17,7 +17,6 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await dotenv.load(fileName: ".env");
-  // print('✅ Env loaded: ${dotenv.env['SUPABASE_URL']}');
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
