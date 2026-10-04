@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:screensage/core/widgets/premium_gate_widget.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -40,6 +41,7 @@ class _FocusDNAView extends StatefulWidget {
 class _FocusDNAViewState extends State<_FocusDNAView> {
   final _cardKey = GlobalKey();
   bool _isSharing = false;
+  final GlobalKey _exportCardKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
@@ -137,7 +139,8 @@ class _FocusDNAViewState extends State<_FocusDNAView> {
                         'Discover your unique focus archetype. Builds over time with every session.',
                     child: RepaintBoundary(
                       key: _cardKey,
-                      child: _ShareableCard(dna: dna),
+                      child: _ShareableCard(
+                          dna: dna), // isExportVersion defaults to false
                     ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.05),
                   ),
                 ),
@@ -163,6 +166,17 @@ class _FocusDNAViewState extends State<_FocusDNAView> {
                     label: Text(
                         _isSharing ? 'Preparing...' : 'Share My Focus DNA'),
                   ).animate().fadeIn(delay: 200.ms),
+                ),
+
+                Offstage(
+                  offstage: true,
+                  child: RepaintBoundary(
+                    key: _exportCardKey,
+                    child: SizedBox(
+                      width: MediaQuery.of(context).size.width - 48,
+                      child: _ShareableCard(dna: dna, isExportVersion: true),
+                    ),
+                  ),
                 ),
 
                 const SizedBox(height: 32),
@@ -245,8 +259,12 @@ class _FocusDNAViewState extends State<_FocusDNAView> {
     HapticFeedback.mediumImpact();
 
     try {
-      final boundary =
-          _cardKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      // Make sure the offstage export widget has completed a build/layout
+      // pass before we try to capture it (safe even on the very first share).
+      await WidgetsBinding.instance.endOfFrame;
+
+      final boundary = _exportCardKey.currentContext!.findRenderObject()
+          as RenderRepaintBoundary;
       final image = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       final bytes = byteData!.buffer.asUint8List();
@@ -254,11 +272,12 @@ class _FocusDNAViewState extends State<_FocusDNAView> {
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/focus_dna.png');
       await file.writeAsBytes(bytes);
-
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text:
-            'My Focus DNA on ScreenSage — ${dna.archetype} | Score: ${dna.focusScore} 🧠\nscreensage.app',
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          text:
+              'My Focus DNA on ScreenSage — ${dna.archetype} | Score: ${dna.focusScore} 🧠\nscreensage.app',
+        ),
       );
     } catch (e) {
       if (mounted) {
@@ -277,8 +296,13 @@ class _FocusDNAViewState extends State<_FocusDNAView> {
 
 // ── Shareable Card ─────────────────────────────────────────────────
 class _ShareableCard extends StatelessWidget {
-  const _ShareableCard({required this.dna});
+  const _ShareableCard({
+    required this.dna,
+    this.isExportVersion = false,
+  });
+
   final FocusDNA dna;
+  final bool isExportVersion; // true only for the hidden capture copy
 
   @override
   Widget build(BuildContext context) {
@@ -304,7 +328,7 @@ class _ShareableCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top row
+          // Top row (unchanged)
           Row(
             children: [
               Container(
@@ -336,7 +360,6 @@ class _ShareableCard extends StatelessWidget {
                   ],
                 ),
               ),
-              // Score badge
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -359,7 +382,7 @@ class _ShareableCard extends StatelessWidget {
 
           const SizedBox(height: 20),
 
-          // Archetype
+          // Archetype box (unchanged)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
@@ -390,7 +413,7 @@ class _ShareableCard extends StatelessWidget {
 
           const SizedBox(height: 16),
 
-          // Stats row
+          // Stats row (unchanged)
           Row(
             children: [
               _CardStat(
@@ -418,7 +441,7 @@ class _ShareableCard extends StatelessWidget {
 
           const SizedBox(height: 16),
 
-          // Peak info row
+          // Peak / best-day row (unchanged)
           Row(
             children: [
               const Icon(Icons.wb_sunny_outlined,
@@ -445,7 +468,7 @@ class _ShareableCard extends StatelessWidget {
 
           const SizedBox(height: 12),
 
-          // Percentile
+          // Percentile row (unchanged)
           Row(
             children: [
               const Icon(Icons.emoji_events_outlined,
@@ -459,6 +482,52 @@ class _ShareableCard extends StatelessWidget {
               ),
             ],
           ),
+
+          // -------------------------------------------------------------
+          // WATERMARK + QR — ONLY rendered when isExportVersion is true.
+          // Footer treatment: hairline divider to separate it from the
+          // stats above, muted 40-45% opacity so it doesn't compete with
+          // the archetype/score, small 40px QR on a white chip so it
+          // still scans cleanly against the dark gradient.
+          // -------------------------------------------------------------
+          if (isExportVersion) ...[
+            const SizedBox(height: 20),
+            Divider(color: Colors.white.withOpacity(0.08), height: 1),
+            const SizedBox(height: 14),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Image.asset(
+                  'assets/icons/SS_icon_2.png',
+                  height: 12,
+                  width: 12,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'ScreenSage',
+                  style: ScreenSageTextStyles.bodySmall.copyWith(
+                    color: Colors.white.withOpacity(0.8),
+                    fontSize: 11,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: QrImageView(
+                    data: 'https://screensage.app/get?src=focusdna',
+                    version: QrVersions.auto,
+                    size: 40,
+                    gapless: true,
+                    backgroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

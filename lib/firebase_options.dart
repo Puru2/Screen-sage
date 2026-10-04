@@ -59,12 +59,13 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyCIjZTLR2fDdZW5x0y3sibD3G8dvqDKgqc',
-    appId: '1:690263266063:ios:b6e4393a0a8e72b7aca47a',
+    appId: '1:690263266063:ios:0e1533c66c0cae05aca47a',
     messagingSenderId: '690263266063',
     projectId: 'screen-sage-dfef4',
     storageBucket: 'screen-sage-dfef4.firebasestorage.app',
-    iosClientId:
-        '690263266063-5prggig16o73ifmr9lkpg94h2ujg52qs.apps.googleusercontent.com',
+    androidClientId: '690263266063-r1987igq1dtd9n9q5iqc486qihv2hkir.apps.googleusercontent.com',
+    iosClientId: '690263266063-hbrfqp533vq4otojhm9fh9bjl0cbcpoq.apps.googleusercontent.com',
     iosBundleId: 'com.pratham.screensage',
   );
+
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:screensage/features/auth/data/repositories/auth_repository.dart';
 import 'package:screensage/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:screensage/features/focus_dna/data/repositories/focus_dna_repository.dart';
 import 'package:screensage/main.dart';
 import 'core/router/app_router.dart';
 import 'core/services/screen_time_service.dart';
@@ -37,13 +38,14 @@ class ScreenSageApp extends StatelessWidget {
             ..add(EarnedTimeLoadRequested()),
         ),
         BlocProvider<StreakBloc>(
-          create: (_) =>
-              StreakBloc(StreakRepository())..add(StreakLoadRequested()),
+          create: (_) => StreakBloc(StreakRepository()),
         ),
         BlocProvider<SettingsBloc>(
           create: (_) =>
               SettingsBloc(SettingsRepository())..add(SettingsLoadRequested()),
         ),
+        BlocProvider<FocusDNABloc>(
+            create: (_) => FocusDNABloc(FocusDNARepository()))
       ],
       child: _AppLifecycleBridge(
         // ← wrap MaterialApp with this

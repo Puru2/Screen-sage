@@ -63,8 +63,8 @@
     <string>ScreenSage uses Screen Time to block distracting apps during focus sessions.</string>
     <key>NSUserNotificationsUsageDescription</key>
     <string>ScreenSage sends focus reminders and session summaries.</string>
-    <key>NSMotionUsageDescription</key>
-    <string>ScreenSage tracks steps to earn focus time through physical activity.</string>
+    <!-- <key>NSMotionUsageDescription</key>
+    <string>ScreenSage tracks steps to earn focus time through physical activity.</string> -->
     <key>UIBackgroundModes</key>
     <array>
         <string>fetch</string>

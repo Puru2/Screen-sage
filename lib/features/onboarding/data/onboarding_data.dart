@@ -31,9 +31,9 @@ class OnboardingData {
     OnboardingPage(
       emoji: '🔥',
       headline: 'Your streak\nstarts today.',
-      subheadline: '7 days free. Then \$6.99/month.',
+      subheadline: '7 days free. Then \$4.99/month.',
       body:
-          'Cancel anytime. No dark patterns. If ScreenSage doesn\'t change your habits in a week, you owe us nothing.',
+          'No dark patterns. If ScreenSage doesn\'t change your habits in a week, you owe us nothing.',
     ),
   ];
 }

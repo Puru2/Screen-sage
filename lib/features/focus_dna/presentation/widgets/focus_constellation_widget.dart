@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/theme/color_scheme.dart';
@@ -26,6 +27,7 @@ class _FocusConstellationState extends State<FocusConstellation>
   late AnimationController _twinkle;
   late AnimationController _entry;
   final _repaintKey = GlobalKey();
+  final _exportRepaintKey = GlobalKey();
   bool _isSharing = false;
   int? _tappedIndex; // for tap-to-reveal session detail
 
@@ -120,128 +122,19 @@ class _FocusConstellationState extends State<FocusConstellation>
         // ── Full-width sky — no card border ────────────────
         RepaintBoundary(
           key: _repaintKey,
-          child: SizedBox(
-            width: double.infinity,
-            height: 340,
-            child: Stack(
-              children: [
-                // Deep space gradient — bleeds edge to edge
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: _ConstellationPainter._skyColors(),
-                      stops: const [0.0, 0.5, 1.0],
-                    ),
-                  ),
-                ),
-
-                // Nebula glow patches — static ambient color
-                Positioned(
-                  top: 40,
-                  left: 60,
-                  child: Container(
-                    width: 200,
-                    height: 130,
-                    decoration: BoxDecoration(
-                      gradient: RadialGradient(
-                        colors: [
-                          _ConstellationPainter._nebulaColor().withOpacity(0.1),
-                          Colors.transparent,
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 40,
-                  right: 30,
-                  child: Container(
-                    width: 160,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      gradient: RadialGradient(
-                        colors: [
-                          _ConstellationPainter._nebulaColor()
-                              .withOpacity(0.07),
-                          Colors.transparent,
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Star map
-                AnimatedBuilder(
-                  animation: Listenable.merge([_twinkle, _entry]),
-                  builder: (context, _) {
-                    return GestureDetector(
-                      onTapUp: (details) => _handleTap(details.localPosition),
-                      child: CustomPaint(
-                        size: Size(
-                          MediaQuery.of(context).size.width,
-                          340,
-                        ),
-                        painter: _ConstellationPainter(
-                          sessions: widget.sessions,
-                          twinkleValue: _twinkle.value,
-                          entryProgress: _entry.value,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-
-                // Tapped session tooltip
-                if (_tappedIndex != null &&
-                    _tappedIndex! < widget.sessions.length)
-                  _SessionTooltip(
-                    session: widget.sessions[_tappedIndex!],
-                    onDismiss: () => setState(() => _tappedIndex = null),
-                  ),
-
-                // Time-of-day axis — bottom strip
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    height: 28,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.transparent,
-                          Colors.black.withOpacity(0.4),
-                        ],
-                      ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          _TimeLabel('12am'),
-                          _TimeLabel('6am'),
-                          _TimeLabel('12pm'),
-                          _TimeLabel('6pm'),
-                          _TimeLabel('12am'),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          child: _buildConstellation(isExportVersion: false),
         ).animate().fadeIn(
               delay: 200.ms,
               duration: 1000.ms,
             ),
 
+        Offstage(
+          offstage: true,
+          child: RepaintBoundary(
+            key: _exportRepaintKey,
+            child: _buildConstellation(isExportVersion: true),
+          ),
+        ),
         // ── Legend + insight strip ─────────────────────────
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
@@ -277,6 +170,139 @@ class _FocusConstellationState extends State<FocusConstellation>
             ),
           ).animate().fadeIn(delay: 500.ms),
       ],
+    );
+  }
+
+  Widget _buildConstellation({
+    required bool isExportVersion,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      height: 340,
+      child: Stack(
+        children: [
+          // ── Deep space gradient ─────────────────────────────
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: _ConstellationPainter._skyColors(),
+                stops: const [0.0, 0.5, 1.0],
+              ),
+            ),
+          ),
+
+          // ── Nebula glow patches ─────────────────────────────
+          Positioned(
+            top: 40,
+            left: 60,
+            child: Container(
+              width: 200,
+              height: 130,
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  colors: [
+                    _ConstellationPainter._nebulaColor().withOpacity(0.1),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          Positioned(
+            bottom: 40,
+            right: 30,
+            child: Container(
+              width: 160,
+              height: 100,
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  colors: [
+                    _ConstellationPainter._nebulaColor().withOpacity(0.07),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ── Star map ────────────────────────────────────────
+          AnimatedBuilder(
+            animation: Listenable.merge([_twinkle, _entry]),
+            builder: (context, _) {
+              return GestureDetector(
+                onTapUp: isExportVersion
+                    ? null
+                    : (details) => _handleTap(details.localPosition),
+                child: CustomPaint(
+                  size: Size(
+                    MediaQuery.of(context).size.width,
+                    340,
+                  ),
+                  painter: _ConstellationPainter(
+                    sessions: widget.sessions,
+                    twinkleValue: _twinkle.value,
+                    entryProgress: _entry.value,
+                  ),
+                ),
+              );
+            },
+          ),
+
+          // ── Tooltip only on visible version ─────────────────
+          if (!isExportVersion &&
+              _tappedIndex != null &&
+              _tappedIndex! < widget.sessions.length)
+            _SessionTooltip(
+              session: widget.sessions[_tappedIndex!],
+              onDismiss: () => setState(() => _tappedIndex = null),
+            ),
+
+          // ── Time axis ───────────────────────────────────────
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: 28,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.4),
+                  ],
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: const [
+                    _TimeLabel('12am'),
+                    _TimeLabel('6am'),
+                    _TimeLabel('12pm'),
+                    _TimeLabel('6pm'),
+                    _TimeLabel('12am'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ── EXPORT ONLY ─────────────────────────────────────
+          if (isExportVersion)
+            Positioned(
+              right: 14,
+              bottom: 38,
+              child: _ConstellationBranding(),
+            ),
+        ],
+      ),
     );
   }
 
@@ -318,26 +344,95 @@ class _FocusConstellationState extends State<FocusConstellation>
   Future<void> _share() async {
     HapticFeedback.mediumImpact();
     setState(() => _isSharing = true);
+
     try {
-      final boundary = _repaintKey.currentContext?.findRenderObject()
+      // Make sure the hidden export widget has completed layout.
+      await WidgetsBinding.instance.endOfFrame;
+
+      final boundary = _exportRepaintKey.currentContext?.findRenderObject()
           as RenderRepaintBoundary?;
+
       if (boundary == null) return;
-      final image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+
+      final image = await boundary.toImage(
+        pixelRatio: 3.0,
+      );
+
+      final byteData = await image.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+
       if (byteData == null) return;
+
       final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/my_constellation.png');
-      await file.writeAsBytes(byteData.buffer.asUint8List());
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text:
-            'My focus constellation ✨\n${widget.sessions.length} sessions. Building something real.\n\nScreenSage 🧠',
+
+      final file = File(
+        '${dir.path}/my_constellation.png',
+      );
+
+      await file.writeAsBytes(
+        byteData.buffer.asUint8List(),
+      );
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [
+            XFile(file.path),
+          ],
+          text: 'My focus constellation ✨\n'
+              '${widget.sessions.length} sessions. Building something real.\n\n'
+              'ScreenSage 🧠\nscreensage.app',
+        ),
       );
     } catch (e) {
       debugPrint('Share error: $e');
     } finally {
-      if (mounted) setState(() => _isSharing = false);
+      if (mounted) {
+        setState(() => _isSharing = false);
+      }
     }
+  }
+}
+
+class _ConstellationBranding extends StatelessWidget {
+  const _ConstellationBranding();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Image.asset(
+          'assets/icons/SS_icon_2.png',
+          height: 12,
+          width: 12,
+        ),
+        const SizedBox(width: 5),
+        Text(
+          'ScreenSage',
+          style: ScreenSageTextStyles.bodySmall.copyWith(
+            color: Colors.white.withOpacity(0.8),
+            fontSize: 10,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.90),
+            borderRadius: BorderRadius.circular(5),
+          ),
+          child: QrImageView(
+            data: 'https://screensage.app/get?src=constellation',
+            version: QrVersions.auto,
+            size: 34,
+            gapless: true,
+            backgroundColor: Colors.white,
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -377,13 +472,16 @@ class _ConstellationPainter extends CustomPainter {
   static Color _nebulaColor() {
     final hour = DateTime.now().hour;
     if (hour >= 5 && hour < 7) return const Color(0xFFFF6B9D); // dawn — pink
-    if (hour >= 7 && hour < 10)
+    if (hour >= 7 && hour < 10) {
       return const Color(0xFF4A90E2); // morning — blue
+    }
     if (hour >= 10 && hour < 16) return ScreenSageColors.accent; // day — green
-    if (hour >= 16 && hour < 19)
+    if (hour >= 16 && hour < 19) {
       return const Color(0xFFFFAA44); // golden — amber
-    if (hour >= 19 && hour < 21)
+    }
+    if (hour >= 19 && hour < 21) {
       return const Color(0xFFE040FB); // dusk — magenta
+    }
     return ScreenSageColors.violet; // night — violet
   }
 

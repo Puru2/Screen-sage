@@ -174,6 +174,14 @@ import UserNotifications
           result(true)
         #endif
 
+      case "openSettings":
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+          DispatchQueue.main.async {
+            UIApplication.shared.open(url)
+          }
+        }
+        result(nil)
+
       default:
         result(FlutterMethodNotImplemented)
       }

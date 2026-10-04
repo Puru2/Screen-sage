@@ -98,14 +98,39 @@ class _SessionHomeScreenState extends State<SessionHomeScreen> {
           ),
           backgroundColor: ScreenSageColors.danger,
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
       return;
     }
 
+    // CHECK SCREEN TIME PERMISSION
+    final status = await ScreenTimeService.getAuthorizationStatus();
+
+    if (!mounted) return;
+
+    if (status != 'approved') {
+      if (status == 'notDetermined') {
+        final granted = await ScreenTimeService.requestAuthorization();
+
+        if (!mounted) return;
+
+        if (!granted) {
+          await _showScreenTimeRequiredDialog(context);
+          return;
+        }
+      } else {
+        await _showScreenTimeRequiredDialog(context);
+        return;
+      }
+    }
+
+    // Permission is available.
+    // Now check selected apps.
     final latestCount = await ScreenTimeService.getSelectedAppCount();
+
     if (!mounted) return;
 
     setState(() => _blockedAppCount = latestCount);
@@ -114,11 +139,13 @@ class _SessionHomeScreenState extends State<SessionHomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text(
-              'Select apps to block first, then start your session.'),
+            'Select apps to block first, then start your session.',
+          ),
           backgroundColor: ScreenSageColors.danger,
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
       return;
@@ -135,6 +162,70 @@ class _SessionHomeScreenState extends State<SessionHomeScreen> {
 
     _intentionController.clear();
     _intention = '';
+  }
+
+  Future<void> _showScreenTimeRequiredDialog(BuildContext context) async {
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: ScreenSageColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(28),
+        ),
+      ),
+      builder: (sheetContext) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            24,
+            24,
+            24,
+            MediaQuery.of(sheetContext).padding.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.shield_outlined,
+                size: 52,
+                color: ScreenSageColors.accent,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Screen Time Access Required',
+                style: ScreenSageTextStyles.headlineMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'ScreenSage needs Screen Time access to block '
+                'your selected apps during a focus session.',
+                style: ScreenSageTextStyles.bodyMedium.copyWith(
+                  color: ScreenSageColors.textSecondary,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(sheetContext);
+                    await ScreenTimeService.openSettings();
+                  },
+                  child: const Text('Open Settings'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.pop(sheetContext),
+                child: const Text('Not Now'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _applyFromSettings(UserSettings s) {

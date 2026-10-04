@@ -154,7 +154,7 @@ class _AuthViewState extends State<_AuthView> {
                       Text(
                         _isLogin
                             ? 'Sign in to continue your journey.'
-                            : '7 days free, then \$6.99/month.\nCancel anytime.',
+                            : '7 days free, then \$4.99/month.',
                         style: ScreenSageTextStyles.bodyMedium,
                       ).animate().fadeIn(delay: 300.ms),
 

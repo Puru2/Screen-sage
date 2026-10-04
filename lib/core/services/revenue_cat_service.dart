@@ -11,12 +11,23 @@ class RevenueCatService {
   static final String _entitlementId = AppConstants.entitlementPremium;
 
   static Future<void> init() async {
-    await Purchases.setLogLevel(
-      kDebugMode ? LogLevel.debug : LogLevel.error,
-    );
+    await Purchases.setLogLevel(LogLevel.verbose);
     final config = PurchasesConfiguration(_iosApiKey);
     await Purchases.configure(config);
     debugPrint('✅ RevenueCat initialized');
+  }
+
+  static Future<bool> checkTrialEligibility(Package package) async {
+    try {
+      final result = await Purchases.checkTrialOrIntroductoryPriceEligibility(
+        [package.storeProduct.identifier],
+      );
+      final status = result[package.storeProduct.identifier]?.status;
+      return status == IntroEligibilityStatus.introEligibilityStatusEligible;
+    } catch (e) {
+      debugPrint('RevenueCat eligibility check error: $e');
+      return false; // fail safe → show "Subscribe" not "Start Trial"
+    }
   }
 
   static Future<CustomerInfo?> getCustomerInfo() async {
@@ -65,12 +76,26 @@ class RevenueCatService {
   static Future<bool> purchase(Package package) async {
     try {
       final CustomerInfo info = await Purchases.purchasePackage(package);
-      return info.entitlements.active.containsKey(_entitlementId);
-    } catch (e) {
-      if (e is PlatformException) {
-        final code = PurchasesErrorHelper.getErrorCode(e);
-        if (code == PurchasesErrorCode.purchaseCancelledError) return false;
-      }
+
+      // 🔍 Debug log
+      debugPrint(
+          '🔑 Active Entitlements from RevenueCat: ${info.entitlements.active.keys.toList()}');
+      debugPrint('🔑 Expected Entitlement ID in Flutter: $_entitlementId');
+
+      final hasEntitlement =
+          info.entitlements.active.containsKey(_entitlementId);
+      debugPrint('🔑 Match result: $hasEntitlement');
+
+      return hasEntitlement;
+    } on PlatformException catch (e) {
+      debugPrint("RevenueCat Exception");
+      debugPrint("Code: ${e.code}");
+      debugPrint("Message: ${e.message}");
+      debugPrint("Details: ${e.details}");
+
+      final code = PurchasesErrorHelper.getErrorCode(e);
+      debugPrint("PurchasesErrorCode: $code");
+
       rethrow;
     }
   }
@@ -118,27 +143,37 @@ class RevenueCatService {
       final info = await Purchases.getCustomerInfo();
       debugPrint("info from ispremium : $info");
       final entitlement = info.entitlements.active[_entitlementId];
-      final active = entitlement != null;
+      final hasActiveEntitlement = entitlement != null;
+      final isTrialPeriod = entitlement?.periodType == PeriodType.trial;
 
       // Debug — print exactly what RevenueCat sees
       debugPrint(
           '🔑 Active entitlements: ${info.entitlements.active.keys.toList()}');
-      debugPrint('🔑 isPremium: $active');
+      debugPrint(
+          '🔑 hasActiveEntitlement: $hasActiveEntitlement, isTrialPeriod: $isTrialPeriod');
+
       if (entitlement != null) {
         debugPrint('🔑 Expires: ${entitlement.expirationDate}');
         debugPrint('🔑 Product: ${entitlement.productIdentifier}');
       }
 
-      await _syncPremiumToFirestore(active, entitlement?.expirationDate);
-      return active;
+      await _syncPremiumToFirestore(
+        isTrial: isTrialPeriod,
+        hasActiveEntitlement: hasActiveEntitlement,
+        expirationDate: entitlement?.expirationDate,
+      );
+      return hasActiveEntitlement;
     } catch (e) {
       debugPrint('❌ isPremium check failed: $e');
       return false;
     }
   }
 
-  static Future<void> _syncPremiumToFirestore(
-      bool isPremium, String? expirationDate) async {
+  static Future<void> _syncPremiumToFirestore({
+    required bool isTrial,
+    required bool hasActiveEntitlement,
+    required String? expirationDate,
+  }) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
@@ -148,17 +183,38 @@ class RevenueCatService {
         validTill = DateTime.tryParse(expirationDate);
       }
 
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'isPremium': isPremium,
+      final Map<String, dynamic> data = {
         'premiumUpdatedAt': FieldValue.serverTimestamp(),
-        'premiumValidTill': validTill != null
-            ? Timestamp.fromDate(validTill)
-            : null, // null = monthly (no known end) or expired
-        'premiumProductId': isPremium ? await _getActiveProductId() : null,
-      }, SetOptions(merge: true));
+        'isInTrial': isTrial,
+      };
+
+      if (isTrial) {
+        // Trialing, not yet a paying customer.
+        data['isPremium'] = false;
+        data['premiumValidTill'] = null;
+        data['premiumProductId'] = null;
+        data['trialEndsAt'] =
+            validTill != null ? Timestamp.fromDate(validTill) : null;
+        data['hasUsedTrial'] = true; // permanent record, never reset below
+      } else if (hasActiveEntitlement) {
+        // Real paid period (either converted from trial, or bought outright).
+        data['isPremium'] = true;
+        data['premiumValidTill'] =
+            validTill != null ? Timestamp.fromDate(validTill) : null;
+        data['premiumProductId'] = await _getActiveProductId();
+      } else {
+        data['isPremium'] = false;
+        data['premiumValidTill'] = null;
+        data['premiumProductId'] = null;
+      }
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set(data, SetOptions(merge: true));
 
       debugPrint(
-          '✅ Firestore synced → isPremium: $isPremium, validTill: $validTill');
+          '✅ Firestore synced → isPremium: ${data['isPremium']}, isInTrial: $isTrial');
     } catch (e) {
       debugPrint('❌ Firestore sync failed: $e');
     }

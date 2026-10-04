@@ -25,6 +25,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   int _page = 0;
   bool _authGranted = false;
   bool _requesting = false;
+  bool _permissionAttempted = false;
 
   late AnimationController _bgPulse;
 
@@ -154,7 +155,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   Widget _buildCta() {
-    // Pages 0–3 — Next
     if (_page < _total - 1) {
       return _GlowButton(
         key: ValueKey('next_$_page'),
@@ -163,23 +163,30 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       );
     }
 
-    // Last page — permission not yet granted
-    if (!_authGranted) {
+    if (_authGranted) {
       return _GlowButton(
-        key: const ValueKey('permission'),
-        label: _requesting ? 'Requesting...' : 'Grant Screen Time Access',
-        loading: _requesting,
-        onTap: _requesting ? null : _requestPermission,
-        secondary: true,
+        key: const ValueKey('launch'),
+        label: "I'm ready",
+        onTap: _finish,
+        showArrow: true,
       );
     }
 
-    // Permission granted — go
+    if (_permissionAttempted) {
+      return _GlowButton(
+        key: const ValueKey('continue_without_permission'),
+        label: 'Continue',
+        onTap: _finish,
+        showArrow: true,
+      );
+    }
+
     return _GlowButton(
-      key: const ValueKey('launch'),
-      label: "I'm ready",
-      onTap: _finish,
-      showArrow: true,
+      key: const ValueKey('permission'),
+      label: _requesting ? 'Requesting...' : 'Continue',
+      loading: _requesting,
+      onTap: _requesting ? null : _requestPermission,
+      secondary: true,
     );
   }
 
@@ -206,29 +213,38 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   Future<void> _requestPermission() async {
-    setState(() => _requesting = true);
+    setState(() {
+      _requesting = true;
+      _permissionAttempted = true;
+    });
+
     HapticFeedback.mediumImpact();
+
     final granted = await ScreenTimeService.requestAuthorization();
-    if (mounted) {
-      setState(() {
-        _authGranted = granted;
-        _requesting = false;
-      });
-      if (granted) {
-        HapticFeedback.heavyImpact();
-        // Ask notification permission right after — user is already saying yes
-        await NotificationService.requestPermission();
-        // Schedule default 9am daily reminder
-        final name =
-            FirebaseAuth.instance.currentUser?.displayName?.split(' ').first ??
-                'there';
-        await NotificationService.scheduleDailyReminder(
-          hour: 9,
-          minute: 0,
-          name: name,
-        );
-        await NotificationService.scheduleStreakRisk(name: name);
-      }
+
+    if (!mounted) return;
+
+    setState(() {
+      _authGranted = granted;
+      _requesting = false;
+    });
+
+    if (granted) {
+      HapticFeedback.heavyImpact();
+
+      await NotificationService.requestPermission();
+
+      final name =
+          FirebaseAuth.instance.currentUser?.displayName?.split(' ').first ??
+              'there';
+
+      await NotificationService.scheduleDailyReminder(
+        hour: 9,
+        minute: 0,
+        name: name,
+      );
+
+      await NotificationService.scheduleStreakRisk(name: name);
     }
   }
 
@@ -509,7 +525,7 @@ class _PageFive extends StatelessWidget {
                     ),
                   ).animate().fadeIn()
                 : Text(
-                    'ScreenSage uses Screen Time to block distracting apps during your sessions.\n\nWe never read your data. We never sell it.',
+                    "ScreenSage uses Screen Time to block distracting apps during your focus sessions. You'll be asked to allow Screen Time access on the next screen",
                     key: const ValueKey('body_needed'),
                     style: ScreenSageTextStyles.bodyLarge.copyWith(
                       color: ScreenSageColors.textSecondary,

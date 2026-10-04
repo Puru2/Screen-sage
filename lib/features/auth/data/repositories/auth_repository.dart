@@ -73,6 +73,7 @@ class AuthRepository {
 
       final OAuthCredential credential = OAuthProvider('apple.com').credential(
         idToken: appleCredential.identityToken,
+        accessToken: appleCredential.authorizationCode,
         rawNonce: rawNonce,
       );
 
@@ -145,6 +146,8 @@ class AuthRepository {
       'premiumProductId': null,
       'premiumValidTill': null,
       'premiumUpdatedAt': null,
+      'isInTrial': false,
+      'trialEndsAt': null
     });
   }
 

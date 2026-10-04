@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/color_scheme.dart';
 import '../../../core/theme/text_styles.dart';
@@ -26,6 +27,7 @@ class _PaywallScreenState extends State<PaywallScreen>
   bool _restoring = false;
   late AnimationController _bgPulse;
   bool _showSuccess = false;
+  bool _trialEligible = false;
 
   @override
   void initState() {
@@ -41,6 +43,13 @@ class _PaywallScreenState extends State<PaywallScreen>
   void dispose() {
     _bgPulse.dispose();
     super.dispose();
+  }
+
+  Future _launchURL(String urlString) async {
+    final Uri url = Uri.parse(urlString);
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      debugPrint('Could not launch $url');
+    }
   }
 
   Future<void> _loadPackages() async {
@@ -60,36 +69,61 @@ class _PaywallScreenState extends State<PaywallScreen>
         (p) => p.packageType == PackageType.annual,
         orElse: () => packages.first, // ← removed _selected! bang
       );
+      print('Default package: $_selected');
+      _updateEligibility(_selected);
     });
+  }
+
+  Future<void> _updateEligibility(Package? package) async {
+    if (package == null) {
+      setState(() => _trialEligible = false);
+      return;
+    }
+    final eligible = await RevenueCatService.checkTrialEligibility(package);
+    if (mounted) setState(() => _trialEligible = eligible);
   }
 
   Future<void> _purchase() async {
     if (_selected == null || _purchasing) return;
+
     HapticFeedback.mediumImpact();
     setState(() => _purchasing = true);
 
     try {
       final success = await RevenueCatService.purchase(_selected!);
+
       if (!mounted) return;
 
       if (success) {
         HapticFeedback.heavyImpact();
-        await widget.onSuccess?.call(); // ← now properly awaitable
+
+        // Tell whoever opened the paywall that purchase succeeded.
+        await widget.onSuccess?.call();
+
         if (!mounted) return;
+
         setState(() => _showSuccess = true);
+
         await Future.delayed(const Duration(milliseconds: 1200));
+
         if (!mounted) return;
+
         Navigator.pop(context, true);
       }
     } on PurchasesErrorCode catch (e) {
       if (!mounted) return;
+
       if (e != PurchasesErrorCode.purchaseCancelledError) {
         _showError('Purchase failed. Please try again.');
       }
     } catch (e) {
-      if (mounted) _showError('Something went wrong. Please try again.');
+      if (mounted) {
+        _showError('Something went wrong. Please try again.');
+      }
     } finally {
-      if (mounted) setState(() => _purchasing = false);
+      if (mounted) {
+        setState(() => _purchasing = false);
+      }
     }
   }
 
@@ -353,7 +387,10 @@ class _PaywallScreenState extends State<PaywallScreen>
                               isSelected: _selected == pkg,
                               onTap: () {
                                 HapticFeedback.selectionClick();
-                                setState(() => _selected = pkg);
+                                setState(() {
+                                  _selected = pkg;
+                                  _updateEligibility(_selected);
+                                });
                               },
                             ).animate().fadeIn(delay: 500.ms),
                           ),
@@ -371,11 +408,45 @@ class _PaywallScreenState extends State<PaywallScreen>
 
                 // ── Sticky CTA ────────────────────────────────
                 _StickyBottom(
-                  selected: _selected,
-                  purchasing: _purchasing,
-                  onPurchase: _purchase,
-                  showSuccess: _showSuccess,
+                    selected: _selected,
+                    purchasing: _purchasing,
+                    onPurchase: _purchase,
+                    showSuccess: _showSuccess,
+                    trialEligible: _trialEligible),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      GestureDetector(
+                        onTap: () => _launchURL(
+                            'https://sites.google.com/view/screensage-privacy-policy/home'),
+                        child: Text(
+                          'Privacy Policy',
+                          style: ScreenSageTextStyles.bodySmall.copyWith(
+                            color: ScreenSageColors.textTertiary,
+                            decoration: TextDecoration.underline,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 24),
+                      GestureDetector(
+                        onTap: () => _launchURL(
+                            'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'),
+                        child: Text(
+                          'Terms of Use',
+                          style: ScreenSageTextStyles.bodySmall.copyWith(
+                            color: ScreenSageColors.textTertiary,
+                            decoration: TextDecoration.underline,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(height: 8),
               ],
             ),
           ),
@@ -707,7 +778,6 @@ class _SocialProof extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Cancel anytime from App Store Settings. '
                   'No hidden charges. Trial ends, you decide.',
                   style: ScreenSageTextStyles.bodySmall.copyWith(
                     color: ScreenSageColors.textTertiary,
@@ -725,17 +795,18 @@ class _SocialProof extends StatelessWidget {
 
 // ── Sticky Bottom CTA ─────────────────────────────────────────────
 class _StickyBottom extends StatelessWidget {
-  const _StickyBottom({
-    required this.selected,
-    required this.purchasing,
-    required this.onPurchase,
-    required this.showSuccess,
-  });
+  const _StickyBottom(
+      {required this.selected,
+      required this.purchasing,
+      required this.onPurchase,
+      required this.showSuccess,
+      required this.trialEligible});
 
   final Package? selected;
   final bool purchasing;
   final VoidCallback onPurchase;
   final bool showSuccess;
+  final bool trialEligible;
 
   @override
   Widget build(BuildContext context) {
@@ -836,7 +907,9 @@ class _StickyBottom extends StatelessWidget {
                                 ),
                               )
                             : Text(
-                                'Start 7-Day Free Trial',
+                                trialEligible
+                                    ? 'Start 7-Day Free Trial'
+                                    : 'Subscribe Now',
                                 style:
                                     ScreenSageTextStyles.titleMedium.copyWith(
                                   color: Colors.white,
@@ -856,8 +929,8 @@ class _StickyBottom extends StatelessWidget {
             duration: const Duration(milliseconds: 300),
             child: Text(
               isAnnual
-                  ? 'Free for 7 days · Then ${selected?.storeProduct.priceString ?? ''}/year · Cancel anytime'
-                  : 'Free for 7 days · Then ${selected?.storeProduct.priceString ?? ''}/month · Cancel anytime',
+                  ? 'Free for 7 days · Then ${selected?.storeProduct.priceString ?? ''}/year '
+                  : 'Free for 7 days · Then ${selected?.storeProduct.priceString ?? ''}/month ',
               style: ScreenSageTextStyles.bodySmall.copyWith(
                 color: ScreenSageColors.textTertiary,
                 fontSize: 11,

@@ -129,5 +129,15 @@ class ScreenTimeService {
     }
   }
 
+  static Future<void> openSettings() async {
+    if (!_isIOS) return;
+
+    try {
+      await _channel.invokeMethod('openSettings');
+    } catch (e) {
+      debugPrint('❌ openSettings: $e');
+    }
+  }
+
   static bool get _isIOS => defaultTargetPlatform == TargetPlatform.iOS;
 }

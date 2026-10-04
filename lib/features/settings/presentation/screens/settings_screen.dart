@@ -4,12 +4,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:purchases_flutter/models/entitlement_info_wrapper.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
+import '../../../../core/services/premium_gate.dart';
 import '../../../../core/services/revenue_cat_service.dart';
 import '../../../../core/services/screen_time_service.dart';
 import '../../../../core/theme/color_scheme.dart';
 import '../../../../core/theme/text_styles.dart';
+import '../../../../main.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../onboarding/presentation/screens/philosophy_onboarding.dart';
 import '../../../paywall/presentation/paywall_screen.dart';
@@ -46,8 +47,6 @@ class _ProfileView extends StatefulWidget {
 }
 
 class _ProfileViewState extends State<_ProfileView> {
-  bool _isPremium = false;
-  bool _premiumLoading = true;
   int _blockedAppCount = 0;
   String? _username;
   bool _usernameLoading = true;
@@ -55,7 +54,6 @@ class _ProfileViewState extends State<_ProfileView> {
   @override
   void initState() {
     super.initState();
-    _checkPremium();
     _loadBlockedAppCount();
     _loadUsername();
   }
@@ -88,16 +86,6 @@ class _ProfileViewState extends State<_ProfileView> {
     if (mounted) setState(() => _blockedAppCount = count);
   }
 
-  Future<void> _checkPremium() async {
-    final result = await RevenueCatService.isPremium();
-    if (mounted) {
-      setState(() {
-        _isPremium = result;
-        _premiumLoading = false;
-      });
-    }
-  }
-
   Future<void> _showManagePlanSheet(BuildContext context) async {
     showModalBottomSheet(
       context: context,
@@ -109,6 +97,7 @@ class _ProfileViewState extends State<_ProfileView> {
 
   @override
   Widget build(BuildContext context) {
+    final premium = PremiumGateProvider.of(context);
     final user = FirebaseAuth.instance.currentUser;
     final displayName = _usernameLoading
         ? null
@@ -203,18 +192,21 @@ class _ProfileViewState extends State<_ProfileView> {
               const SizedBox(height: 24),
 
               PremiumCard(
-                isPremium: _isPremium,
-                loading: _premiumLoading,
+                isPremium: premium.isPremium,
+                loading: !premium.loaded,
                 onUpgrade: () async {
-                  await Navigator.push(
+                  await Navigator.push<bool>(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => PaywallScreen(
-                        onSuccess: () => _checkPremium(),
+                      builder: (_) => PremiumGateProvider(
+                        notifier: premiumNotifier,
+                        child: PaywallScreen(
+                          onSuccess: () =>
+                              premiumNotifier.refreshAfterPurchase(),
+                        ),
                       ),
                     ),
                   );
-                  _checkPremium();
                 },
                 onManage: () => _showManagePlanSheet(context),
               ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.05),

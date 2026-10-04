@@ -90,7 +90,13 @@
           "familyShareable" : false,
           "groupNumber" : 2,
           "internalID" : "6759958732",
-          "introductoryOffer" : null,
+          "introductoryOffer" : {
+            "displayPrice" : "0",
+            "internalID" : "6F3A9C21-8B4D-4E17-9A2F-1C5D7E8B3A90",
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P1W",
+             "numberOfPeriods" : 1
+          },
           "localizations" : [
             {
               "description" : "Enjoy the ScreenSage premium features for a month",
@@ -118,7 +124,13 @@
           "familyShareable" : false,
           "groupNumber" : 1,
           "internalID" : "6759958871",
-          "introductoryOffer" : null,
+          "introductoryOffer" : {
+            "displayPrice" : "0",
+            "internalID" : "D8E4F72B-3C5A-4691-BF08-2A6D9E1C4F53",
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P1W",
+            "numberOfPeriods" : 1
+          },
           "localizations" : [
             {
               "description" : "Enjoy the ScreenSage premium features for a year",

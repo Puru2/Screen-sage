@@ -13,48 +13,103 @@ import ManagedSettings
 @available(iOS 16.0, *)
 class ShieldActionExtension: ShieldActionDelegate {
   override func handle(
-    action: ShieldAction, for application: ApplicationToken,
-    completionHandler: @escaping (ShieldActionResponse) -> Void
-  ) {
-    handleAction(action, completionHandler: completionHandler)
-  }
-
-  override func handle(
-    action: ShieldAction, for webDomain: WebDomainToken,
-    completionHandler: @escaping (ShieldActionResponse) -> Void
-  ) {
-    handleAction(action, completionHandler: completionHandler)
-  }
-
-  override func handle(
-    action: ShieldAction, for category: ActivityCategoryToken,
-    completionHandler: @escaping (ShieldActionResponse) -> Void
-  ) {
-    handleAction(action, completionHandler: completionHandler)
-  }
-
-  // MARK: - Shared handler
-  private func handleAction(
-    _ action: ShieldAction,
+    action: ShieldAction,
+    for application: ApplicationToken,
     completionHandler: @escaping (ShieldActionResponse) -> Void
   ) {
     switch action {
     case .primaryButtonPressed:
-      // Primary = "Override (lose streak)" — RED button
-      // User chose to break focus: record it, drop shields, let them in.
+      // 1. Record the lost streak
       recordOverride()
-      ManagedSettingsStore().clearAllSettings()
-      completionHandler(.none)  // FIX: .none dismisses the shield and OPENS the app
+
+      // 2. Safely scope the unblock to ONLY this specific app
+      let store = ManagedSettingsStore()
+      var shieldedApps = store.shield.applications ?? Set<ApplicationToken>()
+      shieldedApps.remove(application)
+      store.shield.applications = shieldedApps
+
+      // 3. .defer tells iOS to re-evaluate the store, noticing the app is clear, and dismisses the shield
+      completionHandler(.defer)
 
     case .secondaryButtonPressed:
-      // Secondary = "Stay focused ✓" — GREEN buttonse
-      // User chose to stay focused: kick them out to the home screen.
-      completionHandler(.close)  // FIX: .close shuts the distracting app down
+      // "Stay focused" -> close the shield and return to home screen
+      completionHandler(.close)
 
     @unknown default:
-      completionHandler(.close)
+      completionHandler(.defer)
     }
   }
+
+  // MARK: - Category Shield Handler
+  override func handle(
+    action: ShieldAction,
+    for category: ActivityCategoryToken,
+    completionHandler: @escaping (ShieldActionResponse) -> Void
+  ) {
+    switch action {
+    case .primaryButtonPressed:
+      recordOverride()
+
+      let store = ManagedSettingsStore()
+      // If you blocked by category (e.g., all Social apps)
+      if case .specific(var categories) = store.shield.applicationCategories {
+        categories.remove(category)
+        store.shield.applicationCategories = .specific(categories)
+      }
+
+      completionHandler(.defer)
+    case .secondaryButtonPressed:
+      completionHandler(.close)
+    @unknown default:
+      completionHandler(.defer)
+    }
+  }
+
+  // MARK: - Web Domain Shield Handler
+  override func handle(
+    action: ShieldAction,
+    for webDomain: WebDomainToken,
+    completionHandler: @escaping (ShieldActionResponse) -> Void
+  ) {
+    switch action {
+    case .primaryButtonPressed:
+      recordOverride()
+
+      let store = ManagedSettingsStore()
+      var shieldedDomains = store.shield.webDomains ?? Set<WebDomainToken>()
+      shieldedDomains.remove(webDomain)
+      store.shield.webDomains = shieldedDomains
+
+      completionHandler(.defer)
+    case .secondaryButtonPressed:
+      completionHandler(.close)
+    @unknown default:
+      completionHandler(.defer)
+    }
+  }
+
+  // MARK: - Shared handler
+  // private func handleAction(
+  //   _ action: ShieldAction,
+  //   completionHandler: @escaping (ShieldActionResponse) -> Void
+  // ) {
+  //   switch action {
+  //   case .primaryButtonPressed:
+  //     // Primary = "Override (lose streak)" — RED button
+  //     // User chose to break focus: record it, drop shields, let them in.
+  //     recordOverride()
+  //     ManagedSettingsStore().clearAllSettings()
+  //     completionHandler(.none)  // FIX: .none dismisses the shield and OPENS the app
+
+  //   case .secondaryButtonPressed:
+  //     // Secondary = "Stay focused ✓" — GREEN buttonse
+  //     // User chose to stay focused: kick them out to the home screen.
+  //     completionHandler(.close)  // FIX: .close shuts the distracting app down
+
+  //   @unknown default:
+  //     completionHandler(.close)
+  //   }
+  // }
 
   // MARK: - Override recording
   private func recordOverride() {

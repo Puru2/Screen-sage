@@ -1,9 +1,11 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' as source;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:purchases_flutter/purchases_flutter.dart';
 import 'app.dart';
 import 'core/observer/app_bloc_observer.dart';
 import 'core/services/notification_service.dart';
@@ -24,12 +26,29 @@ void main() async {
   print('✅ Firebase initialized');
   await RevenueCatService.init();
   await NotificationService.init();
-  await premiumNotifier.refresh();
+  FirebaseAuth.instance.authStateChanges().listen((user) async {
+    if (user != null) {
+      try {
+        await Purchases.logIn(user.uid);
+      } catch (e) {
+        debugPrint('⚠️ RevenueCat logIn on restore failed: $e');
+      }
+      await premiumNotifier.refresh();
+    } else {
+      if (await Purchases.isConfigured) {
+        try {
+          await Purchases.logOut();
+        } catch (_) {}
+      }
+      premiumNotifier.reset();
+    }
+  });
   try {
-    await FirebaseFirestore.instance
+    // FirebaseAuth.instance.signOut();  // incase firebase persists with previous user auth token then logout like this and comment it again
+    await source.FirebaseFirestore.instance
         .collection('_ping')
         .doc('test')
-        .get(const GetOptions(source: Source.server))
+        .get(const source.GetOptions(source: source.Source.server))
         .timeout(const Duration(seconds: 5));
     debugPrint('[Firestore] ✅ Server reachable');
   } catch (e) {
@@ -46,15 +65,6 @@ void main() async {
       systemNavigationBarIconBrightness: Brightness.light,
     ),
   );
-
-  // await Supabase.initialize(
-  //   url: AppConstants.supabaseUrl,
-  //   anonKey: AppConstants.supabaseAnonKey,
-  // );
-  // print('✅ Supabase initialized');
-
-  // ⚠️ RevenueCat skipped until you add real API keys to .env
-  // await Purchases.configure(...);
 
   Bloc.observer = AppBlocObserver();
   runApp(PremiumGateProvider(

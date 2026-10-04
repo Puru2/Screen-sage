@@ -2,7 +2,10 @@
 import 'dart:async';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:purchases_flutter/purchases_flutter.dart';
+import '../../../../main.dart';
 import '../../data/repositories/auth_repository.dart';
 
 // ── Events ──────────────────────────────────────────────────────────
@@ -122,6 +125,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         return;
       }
       await _repo.ensureUserDocument(user: user);
+      try {
+        final logInResult = await Purchases.logIn(user.uid);
+        debugPrint(
+            '🔑 RevenueCat logIn: ${logInResult.customerInfo.originalAppUserId}');
+      } catch (e) {
+        debugPrint('⚠️ RevenueCat logIn failed: $e');
+      }
+      await premiumNotifier.refresh();
       // AuthSuccess will also be emitted by _authSub via AuthUserChanged
     } on FirebaseAuthException catch (e) {
       emit(AuthFailure(e.message ?? 'A Google Sign-In error occurred'));
@@ -141,6 +152,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         return;
       }
       await _repo.ensureUserDocument(user: user);
+      try {
+        final logInResult = await Purchases.logIn(user.uid);
+        debugPrint(
+            '🔑 RevenueCat logIn: ${logInResult.customerInfo.originalAppUserId}');
+      } catch (e) {
+        debugPrint('⚠️ RevenueCat logIn failed: $e');
+      }
+      await premiumNotifier.refresh();
     } on FirebaseAuthException catch (e) {
       emit(AuthFailure(e.message ?? 'An Apple Sign-In error occurred'));
     } catch (e) {
@@ -170,6 +189,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         user: user,
         username: event.username,
       );
+      try {
+        final logInResult = await Purchases.logIn(user.uid);
+        debugPrint(
+            '🔑 RevenueCat logIn: ${logInResult.customerInfo.originalAppUserId}');
+      } catch (e) {
+        debugPrint('⚠️ RevenueCat logIn failed: $e');
+      }
+      await premiumNotifier.refresh();
       // AuthSuccess will follow via _authSub -> AuthUserChanged
     } on FirebaseAuthException catch (e) {
       emit(AuthFailure(e.message ?? 'Sign up failed'));
@@ -189,6 +216,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final user = credential.user;
       if (user != null) {
         await _repo.ensureUserDocument(user: user);
+        try {
+          final logInResult = await Purchases.logIn(user.uid);
+          debugPrint(
+              '🔑 RevenueCat logIn: ${logInResult.customerInfo.originalAppUserId}');
+        } catch (e) {
+          debugPrint('⚠️ RevenueCat logIn failed: $e');
+        }
+        await premiumNotifier.refresh();
       }
     } on FirebaseAuthException catch (e) {
       emit(AuthFailure(e.message ?? 'Sign in failed. Check your credentials.'));
@@ -218,7 +253,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _onSignOut(
       AuthSignOutRequested event, Emitter<AuthState> emit) async {
     emit(AuthLoading());
+    try {
+      if (await Purchases.isConfigured) {
+        await Purchases.logOut(); // resets RC to a fresh anonymous user
+      }
+    } catch (e) {
+      debugPrint('⚠️ RevenueCat logOut failed: $e');
+    }
     await _repo.signOut();
+    premiumNotifier.reset(); // add this method, see #3 below
     emit(Unauthenticated());
   }
 

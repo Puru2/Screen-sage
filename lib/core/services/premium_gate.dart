@@ -28,6 +28,15 @@ class PremiumNotifier extends ChangeNotifier {
   bool get isInTrial => _trialDaysLeft != null;
   bool get loaded => _loaded;
 
+  // Call this immediately on sign-out, BEFORE the async logOut/refresh
+  // resolves, so no frame ever renders stale premium UI for the new session.
+  void reset() {
+    _isPremium = false;
+    _trialDaysLeft = null;
+    _loaded = false;
+    notifyListeners();
+  }
+
   Future<void> refresh() async {
     // TODO: remove before release
     // _isPremium = true;
@@ -41,16 +50,13 @@ class PremiumNotifier extends ChangeNotifier {
       debugPrint('🔄 PremiumNotifier: refreshing...');
       _isPremium = await RevenueCatService.isPremium();
       _trialDaysLeft = await RevenueCatService.trialDaysRemaining();
-      _loaded = true;
-      debugPrint(
-          '🔄 PremiumNotifier: isPremium=$_isPremium, trial=$_trialDaysLeft');
-      notifyListeners();
+      debugPrint('🔄 isPremium=$_isPremium, trial=$_trialDaysLeft');
     } catch (e) {
       debugPrint('❌ PremiumNotifier refresh failed: $e');
+    } finally {
       _loaded = true;
-      notifyListeners();
+      notifyListeners(); // single call, always fires
     }
-    notifyListeners();
   }
 
   // Call this right after a successful purchase — forces a fresh fetch
