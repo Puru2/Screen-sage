@@ -5,6 +5,7 @@ import 'package:screensage/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:screensage/features/focus_dna/data/repositories/focus_dna_repository.dart';
 import 'package:screensage/main.dart';
 import 'core/router/app_router.dart';
+import 'core/services/notification_service.dart';
 import 'core/services/screen_time_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/analytics/data/repositories/analytics_repository.dart';
@@ -76,6 +77,37 @@ class _AppLifecycleBridgeState extends State<_AppLifecycleBridge>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    // Deep links from the iOS block-screen CTA (e.g. screensage://earned)
+    ScreenTimeService.setDeepLinkListener(_handleDeepLink);
+    NotificationService.setTapHandler(_handleDeepLink);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final pending = await ScreenTimeService.getPendingDeepLink();
+      if (pending != null && pending.isNotEmpty) _handleDeepLink(pending);
+      await _consumePendingUnlock();
+    });
+  }
+
+  /// The block-screen CTA can't open the app directly (iOS limitation), so the
+  /// shield extension drops a flag in shared storage — we consume it here and
+  /// land on the Earned Time tab.
+  Future<void> _consumePendingUnlock() async {
+    final pending = await ScreenTimeService.consumePendingUnlock();
+    if (pending && mounted) {
+      debugPrint('🔓 Pending unlock from shield CTA → Earned Time');
+      AppRouter.router.go('/earned');
+    }
+  }
+
+  void _handleDeepLink(String url) {
+    debugPrint('🔗 Deep link received: $url');
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.scheme != 'screensage') return;
+
+    // screensage://earned → Earned Time tab
+    if (uri.host == 'earned' || uri.path.contains('earned')) {
+      AppRouter.router.go('/earned');
+    }
   }
 
   @override
@@ -91,6 +123,9 @@ class _AppLifecycleBridgeState extends State<_AppLifecycleBridge>
 
   Future<void> _onResume() async {
     debugPrint('📱 App resumed');
+
+    // 0. Block-screen CTA handoff (user tapped "Use Earned Minutes")
+    await _consumePendingUnlock();
 
     // 1. Premium refresh stays global
     await premiumNotifier.refresh();

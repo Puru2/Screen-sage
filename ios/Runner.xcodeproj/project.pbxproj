@@ -21,6 +21,10 @@
 		04DA63D32F4E1B1D002EAD5F /* ManagedSettings.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 04DA63BF2F4E1AE5002EAD5F /* ManagedSettings.framework */; };
 		04DA63D52F4E1B1D002EAD5F /* ManagedSettingsUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 04DA63D42F4E1B1D002EAD5F /* ManagedSettingsUI.framework */; };
 		04DA63DD2F4E1B1D002EAD5F /* ShieldConfigurationExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 04DA63D22F4E1B1D002EAD5F /* ShieldConfigurationExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		04A100012F4E1908002EAD01 /* DeviceActivityMonitorExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04A100022F4E1908002EAD02 /* DeviceActivityMonitorExtension.swift */; };
+		04A100032F4E1AE5002EAD03 /* ShieldActionExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04A100042F4E1AE5002EAD04 /* ShieldActionExtension.swift */; };
+		04A100052F4E1B1D002EAD05 /* ShieldConfigurationExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04A100062F4E1B1D002EAD06 /* ShieldConfigurationExtension.swift */; };
+		04A100072F4E1B1D002EAD07 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 04A100082F4E1B1D002EAD08 /* Assets.xcassets */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
 		17FB85A21E6F1290ADA06EB2 /* Pods_ShieldConfigurationExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5A8F933616AFE55E0C45D89B /* Pods_ShieldConfigurationExtension.framework */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
@@ -100,6 +104,10 @@
 		043F47652F97A2CB00E3BF36 /* StoreKitTestCertificate.cer */ = {isa = PBXFileReference; lastKnownFileType = file; name = StoreKitTestCertificate.cer; path = ../../../StoreKitTestCertificate.cer; sourceTree = "<group>"; };
 		04B758672F56DCBE00DB6EA7 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		04D767812F4E20ED00BAD0D6 /* ScreenSageShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenSageShared.swift; sourceTree = "<group>"; };
+		04A100022F4E1908002EAD02 /* DeviceActivityMonitorExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceActivityMonitorExtension.swift; sourceTree = "<group>"; };
+		04A100042F4E1AE5002EAD04 /* ShieldActionExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShieldActionExtension.swift; sourceTree = "<group>"; };
+		04A100062F4E1B1D002EAD06 /* ShieldConfigurationExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShieldConfigurationExtension.swift; sourceTree = "<group>"; };
+		04A100082F4E1B1D002EAD08 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		04D767882F4E284800BAD0D6 /* AppPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPickerView.swift; sourceTree = "<group>"; };
 		04DA63A32F4E18A0002EAD5F /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 		04DA63A82F4E1908002EAD5F /* DeviceActivityExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DeviceActivityExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -214,6 +222,7 @@
 		04DA63AC2F4E1908002EAD5F /* DeviceActivityExtension */ = {
 			isa = PBXGroup;
 			children = (
+				04A100022F4E1908002EAD02 /* DeviceActivityMonitorExtension.swift */,
 			);
 			path = DeviceActivityExtension;
 			sourceTree = "<group>";
@@ -221,6 +230,7 @@
 		04DA63C12F4E1AE5002EAD5F /* ShieldActionExtension */ = {
 			isa = PBXGroup;
 			children = (
+				04A100042F4E1AE5002EAD04 /* ShieldActionExtension.swift */,
 			);
 			path = ShieldActionExtension;
 			sourceTree = "<group>";
@@ -228,6 +238,8 @@
 		04DA63D62F4E1B1D002EAD5F /* ShieldConfigurationExtension */ = {
 			isa = PBXGroup;
 			children = (
+				04A100062F4E1B1D002EAD06 /* ShieldConfigurationExtension.swift */,
+				04A100082F4E1B1D002EAD08 /* Assets.xcassets */,
 			);
 			path = ShieldConfigurationExtension;
 			sourceTree = "<group>";
@@ -501,6 +513,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				04A100072F4E1B1D002EAD07 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -709,6 +722,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				04A100012F4E1908002EAD01 /* DeviceActivityMonitorExtension.swift in Sources */,
 				04D767822F4E20FC00BAD0D6 /* ScreenSageShared.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -717,6 +731,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				04A100032F4E1AE5002EAD03 /* ShieldActionExtension.swift in Sources */,
 				04D767842F4E221400BAD0D6 /* ScreenSageShared.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -725,6 +740,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				04A100052F4E1B1D002EAD05 /* ShieldConfigurationExtension.swift in Sources */,
 				04D767852F4E221400BAD0D6 /* ScreenSageShared.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

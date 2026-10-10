@@ -62,11 +62,15 @@ class SessionHistoryTile extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Text(
-                        completed
-                            ? '${completedMins}m session'
-                            : '${completedMins}m of ${durationMins}m',
-                        style: ScreenSageTextStyles.bodyLarge,
+                      Flexible(
+                        child: Text(
+                          completed
+                              ? '${completedMins}m session'
+                              : '${completedMins}m of ${durationMins}m',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: ScreenSageTextStyles.bodyLarge,
+                        ),
                       ),
                       if (!completed) ...[
                         const SizedBox(width: 8),

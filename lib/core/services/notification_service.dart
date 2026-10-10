@@ -11,6 +11,14 @@ class NotificationService {
   static const int dailyReminderId = 1;
   static const int streakRiskId = 2;
 
+  static void Function(String payload)? _onTapPayload;
+
+  /// Registers a handler for notification taps carrying a payload
+  /// (e.g. a `screensage://` deep link from the block-screen CTA).
+  static void setTapHandler(void Function(String payload) handler) {
+    _onTapPayload = handler;
+  }
+
   static Future<void> cancelDailyReminder() => _plugin.cancel(dailyReminderId);
 
   static Future<void> init() async {
@@ -25,6 +33,12 @@ class NotificationService {
 
     await _plugin.initialize(
       const InitializationSettings(iOS: ios),
+      onDidReceiveNotificationResponse: (response) {
+        final payload = response.payload;
+        if (payload != null && payload.isNotEmpty) {
+          _onTapPayload?.call(payload);
+        }
+      },
     );
     _initialized = true;
     debugPrint('✅ Notifications initialized');
@@ -39,13 +53,16 @@ class NotificationService {
   }
 
   // ── Daily focus reminder ─────────────────────────────────
-  // Fires every day at the user's preferred time
+  // Fires every day at the user's preferred time — their "usual focus
+  // time is approaching" nudge.
   static Future<void> scheduleDailyReminder({
     required int hour,
     required int minute,
     required String name,
   }) async {
-    await _plugin.cancelAll(); // clear old schedules
+    // Only replace the daily reminder — never wipe session-end or
+    // streak notifications that are already scheduled.
+    await _plugin.cancel(dailyReminderId);
 
     final now = tz.TZDateTime.now(tz.local);
     var scheduled = tz.TZDateTime(
@@ -62,8 +79,8 @@ class NotificationService {
 
     await _plugin.zonedSchedule(
       dailyReminderId,
-      'Time to focus, $name 🌿',
-      'Your streak is waiting. Start a session now.',
+      'Focus time approaching, $name 🌿',
+      'Your usual focus time starts now. Begin a session to keep your streak alive.',
       scheduled,
       const NotificationDetails(
         iOS: DarwinNotificationDetails(

@@ -215,10 +215,17 @@ class _AnalyticsView extends StatelessWidget {
                 children: [
                   Text('Daily Focus', style: ScreenSageTextStyles.titleMedium),
                   if (s.bestDayMins > 0)
-                    Text(
-                      'Best: ${s.bestDayLabel} · ${_formatMins(s.bestDayMins)}',
-                      style: ScreenSageTextStyles.labelSmall
-                          .copyWith(color: ScreenSageColors.accent),
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          'Best: ${s.bestDayLabel} · ${_formatMins(s.bestDayMins)}',
+                          maxLines: 1,
+                          style: ScreenSageTextStyles.labelSmall
+                              .copyWith(color: ScreenSageColors.accent),
+                        ),
+                      ),
                     ),
                 ],
               ),
@@ -395,10 +402,15 @@ class _HeroStatCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    _formatMins(mins),
-                    style: ScreenSageTextStyles.displayMedium.copyWith(
-                      color: ScreenSageColors.accent,
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      _formatMins(mins),
+                      maxLines: 1,
+                      style: ScreenSageTextStyles.displayMedium.copyWith(
+                        color: ScreenSageColors.accent,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -515,9 +527,18 @@ class _TagBreakdown extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(tag.tag, style: ScreenSageTextStyles.bodyMedium),
+                        Expanded(
+                          child: Text(
+                            tag.tag,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: ScreenSageTextStyles.bodyMedium,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         Text(
                           '${_fmt(tag.mins)}  ·  $pct%',
+                          maxLines: 1,
                           style: ScreenSageTextStyles.labelSmall
                               .copyWith(color: color),
                         ),
@@ -665,13 +686,30 @@ class _MetricCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: ScreenSageTextStyles.labelSmall),
+          Text(label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: ScreenSageTextStyles.labelSmall),
           const SizedBox(height: 6),
-          Text(value,
-              style:
-                  ScreenSageTextStyles.headlineMedium.copyWith(color: color)),
+          // Scale the value down on narrow screens instead of wrapping
+          SizedBox(
+            width: double.infinity,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                maxLines: 1,
+                style:
+                    ScreenSageTextStyles.headlineMedium.copyWith(color: color),
+              ),
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(sub, style: ScreenSageTextStyles.bodySmall),
+          Text(sub,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: ScreenSageTextStyles.bodySmall),
         ],
       ),
     );

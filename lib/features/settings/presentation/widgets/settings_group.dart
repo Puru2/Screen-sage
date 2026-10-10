@@ -61,33 +61,51 @@ class SettingsItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              Icon(
-                icon,
-                size: 20,
-                color: isDestructive
-                    ? ScreenSageColors.danger
-                    : ScreenSageColors.textSecondary,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  label,
-                  style: ScreenSageTextStyles.bodyLarge.copyWith(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return Row(
+                children: [
+                  Icon(
+                    icon,
+                    size: 20,
                     color: isDestructive
                         ? ScreenSageColors.danger
-                        : ScreenSageColors.textPrimary,
+                        : ScreenSageColors.textSecondary,
                   ),
-                ),
-              ),
-              trailing ??
-                  Icon(
-                    Icons.chevron_right,
-                    size: 18,
-                    color: ScreenSageColors.textTertiary,
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: ScreenSageTextStyles.bodyLarge.copyWith(
+                        color: isDestructive
+                            ? ScreenSageColors.danger
+                            : ScreenSageColors.textPrimary,
+                      ),
+                    ),
                   ),
-            ],
+                  const SizedBox(width: 10),
+                  // Trailing never wraps — on small screens it scales down
+                  // and stays on a single line, right-aligned.
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: constraints.maxWidth * 0.48,
+                    ),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: trailing ??
+                          const Icon(
+                            Icons.chevron_right,
+                            size: 18,
+                            color: ScreenSageColors.textTertiary,
+                          ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),

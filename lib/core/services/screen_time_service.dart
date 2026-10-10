@@ -139,5 +139,57 @@ class ScreenTimeService {
     }
   }
 
+  // ── Daily Block Windows (scheduled downtime) ─────────────────
+  /// Mirrors the user's downtime windows to the iOS App Group and
+  /// (re)registers the repeating DeviceActivity schedules natively.
+  static Future<void> setBlockWindows(
+    List<Map<String, dynamic>> windows,
+  ) async {
+    if (!_isIOS) return;
+    try {
+      await _channel.invokeMethod('setBlockWindows', {'windows': windows});
+      debugPrint('📱 setBlockWindows: ${windows.length} window(s) synced');
+    } catch (e) {
+      debugPrint('❌ setBlockWindows: $e');
+    }
+  }
+
+  // ── Deep links (shield CTA → app) ────────────────────────────
+  /// Registers a listener for URLs opened natively (e.g. the block-screen
+  /// CTA opening `screensage://earned`).
+  static void setDeepLinkListener(void Function(String url) listener) {
+    if (!_isIOS) return;
+    _channel.setMethodCallHandler((call) async {
+      if (call.method == 'onDeepLink' && call.arguments is String) {
+        listener(call.arguments as String);
+      }
+      return null;
+    });
+  }
+
+  /// Returns a deep link that arrived before Flutter was ready (cold start),
+  /// consuming it so it only fires once.
+  static Future<String?> getPendingDeepLink() async {
+    if (!_isIOS) return null;
+    try {
+      return await _channel.invokeMethod<String>('getPendingDeepLink');
+    } catch (e) {
+      debugPrint('❌ getPendingDeepLink: $e');
+      return null;
+    }
+  }
+
+  /// One-shot check for the block-screen CTA handoff: true when the user
+  /// recently tapped "Use Earned Minutes" on the shield. Consumes the flag.
+  static Future<bool> consumePendingUnlock() async {
+    if (!_isIOS) return false;
+    try {
+      return await _channel.invokeMethod<bool>('consumePendingUnlock') ?? false;
+    } catch (e) {
+      debugPrint('❌ consumePendingUnlock: $e');
+      return false;
+    }
+  }
+
   static bool get _isIOS => defaultTargetPlatform == TargetPlatform.iOS;
 }

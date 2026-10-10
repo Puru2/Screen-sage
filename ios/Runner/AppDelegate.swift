@@ -12,6 +12,9 @@ import UserNotifications
 @main
 @objc class AppDelegate: FlutterAppDelegate {
 
+  private var screenTimeChannel: FlutterMethodChannel?
+  private var pendingDeepLink: String?
+
   // ── App Launch ────────────────────────────────────────────────────
   override func application(
     _ application: UIApplication,
@@ -35,11 +38,24 @@ import UserNotifications
     print("🔗 URL scheme: \(url.scheme ?? "nil")")
     print("🔗 Host: \(url.host ?? "nil")")
 
+    // Our own scheme — e.g. the shield CTA opens screensage://earned
+    if url.scheme == "screensage" {
+      handleDeepLink(url.absoluteString)
+      return true
+    }
+
     // Let Supabase handle it
     let handled = super.application(app, open: url, options: options)
     print("🔗 Supabase handled: \(handled)")
 
     return handled
+  }
+
+  // ── Deep Links ────────────────────────────────────────────────────
+  private func handleDeepLink(_ url: String) {
+    // Buffer for cold starts AND forward live — Dart dedupes by route.
+    pendingDeepLink = url
+    screenTimeChannel?.invokeMethod("onDeepLink", arguments: url)
   }
 
   // ── Screen Time Channel Setup ─────────────────────────────────────
@@ -52,6 +68,7 @@ import UserNotifications
       name: "com.screensage/screentime",
       binaryMessenger: controller.binaryMessenger
     )
+    screenTimeChannel = channel
 
     channel.setMethodCallHandler { [weak self] call, result in
       switch call.method {
@@ -182,6 +199,28 @@ import UserNotifications
         }
         result(nil)
 
+      case "setBlockWindows":
+        #if !targetEnvironment(simulator)
+          self?.setBlockWindows(args: call.arguments as? [String: Any], result: result)
+        #else
+          result(true)
+        #endif
+
+      case "getPendingDeepLink":
+        let link = self?.pendingDeepLink ?? nil
+        self?.pendingDeepLink = nil
+        result(link)
+
+      case "consumePendingUnlock":
+        // One-shot read of the shield CTA handoff flag (stale after 30 min).
+        let d = ScreenSageShared.defaults
+        let pending = d?.bool(forKey: ScreenSageShared.pendingUnlockKey) ?? false
+        let at = d?.double(forKey: ScreenSageShared.unlockRequestedAtKey) ?? 0
+        let fresh = Date().timeIntervalSince1970 - at < 1800
+        d?.removeObject(forKey: ScreenSageShared.pendingUnlockKey)
+        d?.removeObject(forKey: ScreenSageShared.unlockRequestedAtKey)
+        result(pending && fresh)
+
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -254,12 +293,7 @@ import UserNotifications
 
       // Apply shield immediately
       let store = ManagedSettingsStore()
-      if !selection.applicationTokens.isEmpty {
-        store.shield.applications = selection.applicationTokens
-      }
-      if !selection.categoryTokens.isEmpty {
-        store.shield.applicationCategories = .specific(selection.categoryTokens)
-      }
+      ScreenSageShared.applyStoredShield(store)
 
       // ── ADD THIS — silence notifications from blocked apps ──────────
       // if !selection.applicationTokens.isEmpty {
@@ -293,7 +327,8 @@ import UserNotifications
       )
 
       let center = DeviceActivityCenter()
-      center.stopMonitoring()  // always clear before starting
+      // Only reset the focus activity — scheduled block windows keep running.
+      center.stopMonitoring([DeviceActivityName(ScreenSageShared.activityName)])
 
       do {
         try center.startMonitoring(
@@ -308,6 +343,7 @@ import UserNotifications
           endDate.timeIntervalSince1970,
           forKey: ScreenSageShared.sessionEndTime
         )
+        ScreenSageShared.setBlockMode("session")
 
         result(true)
       } catch {
@@ -322,9 +358,12 @@ import UserNotifications
     }
 
     private func endSession(result: FlutterResult) {
-      DeviceActivityCenter().stopMonitoring()
-      ManagedSettingsStore().clearAllSettings()
+      DeviceActivityCenter().stopMonitoring([
+        DeviceActivityName(ScreenSageShared.activityName)
+      ])
       ScreenSageShared.defaults?.set(false, forKey: ScreenSageShared.sessionActive)
+      // Keep shields up if a scheduled block window is active right now.
+      ScreenSageShared.evaluateShieldState(ManagedSettingsStore())
       result(true)
     }
   #endif
@@ -346,18 +385,22 @@ import UserNotifications
       )
 
       let center = DeviceActivityCenter()
-      center.stopMonitoring([DeviceActivityName("screensage.free.session")])
+      center.stopMonitoring([DeviceActivityName(ScreenSageShared.freeActivityName)])
 
       do {
         try center.startMonitoring(
-          DeviceActivityName("screensage.free.session"),
+          DeviceActivityName(ScreenSageShared.freeActivityName),
           during: schedule
         )
-        // Persist free session end time so extension can read it
+        // Persist free session end time so extensions can read it
         ScreenSageShared.defaults?.set(
           end.timeIntervalSince1970,
-          forKey: "ScreenSageFreeSessionEnd"
+          forKey: ScreenSageShared.freeSessionEndKey
         )
+        // Earned time: shields come down NOW (even inside a block window)
+        // and the free-session interval end re-locks them.
+        ManagedSettingsStore().clearAllSettings()
+        ScreenSageShared.setBlockMode("none")
         result(true)
       } catch {
         print("❌ scheduleFreeSession error: \(error)")
@@ -366,32 +409,80 @@ import UserNotifications
     }
 
     private func reApplyShields(result: FlutterResult) {
-      guard
-        let data = ScreenSageShared.defaults?.data(
-          forKey: ScreenSageShared.selectionKey),
-        let selection = try? PropertyListDecoder().decode(
-          FamilyActivitySelection.self, from: data)
-      else {
-        result(true)  // No selection saved — nothing to re-apply
+      // Free time is over — re-lock only if a focus session or a
+      // scheduled block window is active right now.
+      DeviceActivityCenter().stopMonitoring([
+        DeviceActivityName(ScreenSageShared.freeActivityName)
+      ])
+      ScreenSageShared.defaults?.removeObject(
+        forKey: ScreenSageShared.freeSessionEndKey
+      )
+      ScreenSageShared.evaluateShieldState(ManagedSettingsStore())
+      result(true)
+    }
+
+    // ── Daily Block Windows (scheduled downtime) ────────────────────
+    private func setBlockWindows(args: [String: Any]?, result: FlutterResult) {
+      guard let raw = args?["windows"] as? [[String: Any]] else {
+        result(
+          FlutterError(
+            code: "BAD_ARGS", message: "windows list required", details: nil))
         return
       }
 
-      let store = ManagedSettingsStore()
-      if !selection.applicationTokens.isEmpty {
-        store.shield.applications = selection.applicationTokens
-      }
-      if !selection.categoryTokens.isEmpty {
-        store.shield.applicationCategories = .specific(selection.categoryTokens)
-      }
-      if !selection.webDomainTokens.isEmpty {
-        store.shield.webDomains = selection.webDomainTokens
+      let windows: [BlockWindow] = raw.compactMap { dict in
+        guard let id = dict["id"] as? String,
+          let start = dict["startMinutes"] as? Int,
+          let end = dict["endMinutes"] as? Int
+        else { return nil }
+        return BlockWindow(
+          id: id,
+          startMinutes: start,
+          endMinutes: end,
+          enabled: dict["enabled"] as? Bool ?? true
+        )
       }
 
-      // Stop free session monitoring
-      DeviceActivityCenter().stopMonitoring([
-        DeviceActivityName("screensage.free.session")
-      ])
+      // Stop monitoring every previously-saved window (covers removals)
+      let center = DeviceActivityCenter()
+      let oldNames = ScreenSageShared.loadBlockWindows().map {
+        DeviceActivityName(ScreenSageShared.blockWindowActivityPrefix + $0.id)
+      }
+      let newNames = windows.map {
+        DeviceActivityName(ScreenSageShared.blockWindowActivityPrefix + $0.id)
+      }
+      center.stopMonitoring(Array(Set(oldNames + newNames)))
 
+      ScreenSageShared.saveBlockWindows(windows)
+
+      // Re-register every enabled window as a daily repeating activity.
+      for window in windows where window.enabled {
+        let clampedEnd = min(window.endMinutes, 1439)
+        let schedule = DeviceActivitySchedule(
+          intervalStart: DateComponents(
+            hour: window.startMinutes / 60,
+            minute: window.startMinutes % 60,
+            second: 0
+          ),
+          intervalEnd: DateComponents(
+            hour: clampedEnd / 60,
+            minute: clampedEnd % 60,
+            second: 59
+          ),
+          repeats: true
+        )
+        do {
+          try center.startMonitoring(
+            DeviceActivityName(ScreenSageShared.blockWindowActivityPrefix + window.id),
+            during: schedule
+          )
+        } catch {
+          print("❌ block window monitoring failed: \(error)")
+        }
+      }
+
+      // Reflect the change immediately — block or unblock right now.
+      ScreenSageShared.evaluateShieldState(ManagedSettingsStore())
       result(true)
     }
   #endif

@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/services/premium_gate.dart';
 import '../../../../core/services/revenue_cat_service.dart';
 import '../../../../core/services/screen_time_service.dart';
@@ -14,9 +15,11 @@ import '../../../../main.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../onboarding/presentation/screens/philosophy_onboarding.dart';
 import '../../../paywall/presentation/paywall_screen.dart';
+import '../../data/models/block_window.dart';
 import '../../data/models/user_settings.dart';
 import '../bloc/settings_bloc.dart';
 import '../widgets/blocked_apps_sheet.dart';
+import '../widgets/downtime_schedule_sheet.dart';
 import '../widgets/notification_sheet.dart';
 import '../widgets/premium_card.dart';
 import '../widgets/settings_group.dart';
@@ -50,12 +53,30 @@ class _ProfileViewState extends State<_ProfileView> {
   int _blockedAppCount = 0;
   String? _username;
   bool _usernameLoading = true;
+  String _notifLabel = 'Set reminder';
 
   @override
   void initState() {
     super.initState();
     _loadBlockedAppCount();
     _loadUsername();
+    _loadNotifLabel();
+  }
+
+  Future<void> _loadNotifLabel() async {
+    final prefs = await SharedPreferences.getInstance();
+    final enabled = prefs.getBool('notif_enabled') ?? false;
+    String label = 'Set reminder';
+    if (enabled) {
+      final hour = prefs.getInt('notif_hour') ?? 9;
+      final minute = prefs.getInt('notif_minute') ?? 0;
+      final period = hour < 12 ? 'AM' : 'PM';
+      final h = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+      label = '$h:${minute.toString().padLeft(2, '0')} $period';
+    } else if (prefs.containsKey('notif_enabled')) {
+      label = 'Off';
+    }
+    if (mounted) setState(() => _notifLabel = label);
   }
 
   Future<void> _loadUsername() async {
@@ -299,28 +320,44 @@ class _ProfileViewState extends State<_ProfileView> {
                   .fadeIn(delay: 350.ms),
               const SizedBox(height: 12),
 
-              SettingsGroup(
-                items: [
-                  SettingsItem(
-                    icon: Icons.notifications_outlined,
-                    label: 'Notifications',
-                    trailing: _trailingValue('Set reminder'),
-                    onTap: () => _showNotificationSheet(context),
-                  ),
-                  SettingsItem(
-                    icon: Icons.apps_outlined,
-                    label: 'Blocked Apps',
-                    trailing: _trailingValue(
-                      _blockedAppCount > 0
-                          ? '$_blockedAppCount app${_blockedAppCount == 1 ? '' : 's'}'
-                          : 'None',
-                    ),
-                    onTap: () async {
-                      await _showBlockedAppsSheet(context);
-                      _loadBlockedAppCount();
-                    },
-                  ),
-                ],
+              BlocBuilder<SettingsBloc, SettingsState>(
+                builder: (context, state) {
+                  final settings = state is SettingsLoaded
+                      ? state.settings
+                      : const UserSettings();
+
+                  return SettingsGroup(
+                    items: [
+                      SettingsItem(
+                        icon: Icons.notifications_outlined,
+                        label: 'Notifications',
+                        trailing: _trailingValue(_notifLabel),
+                        onTap: () => _showNotificationSheet(context),
+                      ),
+                      SettingsItem(
+                        icon: Icons.apps_outlined,
+                        label: 'Blocked Apps',
+                        trailing: _trailingValue(
+                          _blockedAppCount > 0
+                              ? '$_blockedAppCount app${_blockedAppCount == 1 ? '' : 's'}'
+                              : 'None',
+                        ),
+                        onTap: () async {
+                          await _showBlockedAppsSheet(context);
+                          _loadBlockedAppCount();
+                        },
+                      ),
+                      SettingsItem(
+                        icon: Icons.bedtime_outlined,
+                        label: 'Downtime Schedule',
+                        trailing: _trailingValue(
+                          _downtimeSummary(settings.blockWindows),
+                        ),
+                        onTap: () => _showDowntimeSheet(context),
+                      ),
+                    ],
+                  );
+                },
               ).animate().fadeIn(delay: 400.ms),
 
               const SizedBox(height: 24),
@@ -409,8 +446,8 @@ class _ProfileViewState extends State<_ProfileView> {
   }
 
   // ── Notification Sheet ──────────────────────────────────────────
-  void _showNotificationSheet(BuildContext context) {
-    showModalBottomSheet(
+  Future<void> _showNotificationSheet(BuildContext context) async {
+    final saved = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: ScreenSageColors.surface,
       isScrollControlled: true,
@@ -419,6 +456,31 @@ class _ProfileViewState extends State<_ProfileView> {
       ),
       builder: (ctx) => NotificationSheet(),
     );
+    // Refresh the row's trailing label after the user saves/turns off.
+    if (saved == true) _loadNotifLabel();
+  }
+
+  // ── Downtime Schedule Sheet ───────────────────────────────────────
+  void _showDowntimeSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: ScreenSageColors.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => BlocProvider.value(
+        value: context.read<SettingsBloc>(),
+        child: const DowntimeScheduleSheet(),
+      ),
+    );
+  }
+
+  String _downtimeSummary(List<BlockWindow> windows) {
+    final active = windows.where((w) => w.enabled).toList();
+    if (active.isEmpty) return 'Off';
+    if (active.length == 1) return active.first.shortLabel;
+    return '${active.length} windows';
   }
 
   Widget _trailingValue(String text) => Row(
@@ -426,6 +488,8 @@ class _ProfileViewState extends State<_ProfileView> {
         children: [
           Text(
             text,
+            maxLines: 1,
+            softWrap: false,
             style: ScreenSageTextStyles.bodyMedium
                 .copyWith(color: ScreenSageColors.accent),
           ),

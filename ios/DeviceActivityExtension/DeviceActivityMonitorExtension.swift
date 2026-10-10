@@ -24,9 +24,29 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
   override func intervalDidStart(for activity: DeviceActivityName) {
     super.intervalDidStart(for: activity)
 
-    // Session just started — apply shield immediately as a safety net
+    let name = activity.rawValue
+
+    if name == ScreenSageShared.freeActivityName {
+      // Earned free time just began — shields stay DOWN.
+      ScreenSageShared.setBlockMode("none")
+      return
+    }
+
+    if name.hasPrefix(ScreenSageShared.blockWindowActivityPrefix) {
+      // A scheduled daily block window just started.
+      guard !ScreenSageShared.isFreeSessionActive else { return }
+      ScreenSageShared.applyStoredShield(store)
+      ScreenSageShared.setBlockMode(
+        "schedule",
+        windowEndLabel: ScreenSageShared.activeWindow()?.endLabel
+      )
+      return
+    }
+
+    // Focus session just started — apply shield immediately as a safety net
     // (AppDelegate also applies it, but this covers edge cases like device restart)
-    applyShield()
+    ScreenSageShared.applyStoredShield(store)
+    ScreenSageShared.setBlockMode("session")
   }
 
   // Called when the monitored schedule ENDS (session timer ran out naturally)
@@ -34,29 +54,37 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
   override func intervalDidEnd(for activity: DeviceActivityName) {
     super.intervalDidEnd(for: activity)
 
-    switch activity.rawValue {
+    let name = activity.rawValue
 
-    case "screensage.free.session":
-      // Free time is up — re-apply shields automatically
-      applyShield()
-      // Clear free session marker
-      ScreenSageShared.defaults?.removeObject(forKey: "ScreenSageFreeSessionEnd")
+    if name == ScreenSageShared.freeActivityName {
+      // Free time is up — re-lock only if a session/window says so.
+      ScreenSageShared.defaults?.removeObject(
+        forKey: ScreenSageShared.freeSessionEndKey
+      )
+      ScreenSageShared.evaluateShieldState(store)
       sendNotification(
         title: "Free time ended ⏰",
         body: "Apps are re-locked. Ready for another focus session?"
       )
+      return
+    }
 
-    case ScreenSageShared.activityName:
-      clearShield()
+    if name == ScreenSageShared.activityName {
       ScreenSageShared.defaults?.set(
         false, forKey: ScreenSageShared.sessionActive)
+      // Keep shields up if a scheduled block window is still active.
+      ScreenSageShared.evaluateShieldState(store)
       sendNotification(
         title: "Focus session complete 🎉",
         body: "You stayed focused. Your streak is safe."
       )
+      return
+    }
 
-    default:
-      break
+    if name.hasPrefix(ScreenSageShared.blockWindowActivityPrefix) {
+      // Block window ended — clear unless another window/session is active.
+      ScreenSageShared.evaluateShieldState(store)
+      return
     }
   }
 
@@ -67,8 +95,10 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
   ) {
     super.eventDidReachThreshold(event, activity: activity)
 
-    // Re-apply shield in case it was cleared somehow
-    applyShield()
+    // Re-apply shield in case it was cleared somehow —
+    // but never during earned free time.
+    guard !ScreenSageShared.isFreeSessionActive else { return }
+    ScreenSageShared.applyStoredShield(store)
   }
 
   // intervalWillStartWarning: called before schedule starts — not needed for us
@@ -82,6 +112,8 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
   override func intervalWillEndWarning(for activity: DeviceActivityName) {
     super.intervalWillEndWarning(for: activity)
 
+    // Only nudge for focus sessions — not for daily block windows.
+    guard activity.rawValue == ScreenSageShared.activityName else { return }
     sendNotification(
       title: "Almost there ⏱",
       body: "1 minute left in your focus session. Hang on!"
@@ -101,34 +133,6 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
   }
 
   // MARK: - Private Helpers
-
-  private func applyShield() {
-    guard let data = ScreenSageShared.defaults?.data(forKey: ScreenSageShared.selectionKey),
-      let selection = try? PropertyListDecoder().decode(
-        FamilyActivitySelection.self, from: data
-      )
-    else {
-      // No selection saved — nothing to shield. Not an error.
-      return
-    }
-
-    // Only set if non-empty to avoid overwriting with nil accidentally
-    if !selection.applicationTokens.isEmpty {
-      store.shield.applications = selection.applicationTokens
-      // store.notifications.blocked = .specific(selection.applicationTokens)
-    }
-    if !selection.categoryTokens.isEmpty {
-      store.shield.applicationCategories = .specific(selection.categoryTokens)
-    }
-    if !selection.webDomainTokens.isEmpty {
-      store.shield.webDomains = selection.webDomainTokens
-    }
-  }
-
-  private func clearShield() {
-    // clearAllSettings() clears shield + any other ManagedSettings rules
-    store.clearAllSettings()
-  }
 
   private func sendNotification(title: String, body: String) {
     // Extensions have a hard 5MB memory limit — keep this lightweight
